@@ -82,6 +82,10 @@ the clients against stand-in servers, so no LabVIEW is needed.
 
 ## Status
 
-Version 0.1.0, alpha. Verified live on one Windows PC with LabVIEW 2026. Protocol notes are in the
+Version 0.1.1, alpha. Verified live on one Windows PC with LabVIEW 2026. Protocol notes are in the
 project's `docs/` folder: `PROTOCOL_FINDINGS.md`, `DATASOCKET_FINDINGS.md` and
 `SHARED_VARIABLE_FINDINGS.md`.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

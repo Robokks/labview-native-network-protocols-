@@ -24,7 +24,7 @@ readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
 METADATA = "\n".join(
     ["Metadata-Version: 2.1", f"Name: {NAME}", f"Version: {VERSION}", f"Summary: {SUMMARY}",
-     f"Keywords: {keywords}", f"Requires-Python: {REQ_PY}"]
+     f"Keywords: {keywords}", "License: MIT", f"Requires-Python: {REQ_PY}"]
     + [f"Classifier: {c}" for c in classifiers]
     + ["Provides-Extra: test", 'Requires-Dist: pytest>=7; extra == "test"',
        "Description-Content-Type: text/markdown", "", readme])
@@ -48,6 +48,7 @@ def build_wheel() -> Path:
             add(f"{NAME}/{p.relative_to(PKG).as_posix()}", p.read_bytes())
         add(f"{distinfo}/METADATA", METADATA.encode("utf-8"))
         add(f"{distinfo}/WHEEL", WHEEL.encode())
+        add(f"{distinfo}/LICENSE", (ROOT / "LICENSE").read_bytes())
         add(f"{distinfo}/top_level.txt", f"{NAME}\n".encode())
         record.append(f"{distinfo}/RECORD,,")
         z.writestr(f"{distinfo}/RECORD", "\n".join(record) + "\n")
@@ -57,7 +58,8 @@ def build_wheel() -> Path:
 def build_sdist() -> Path:
     base = f"{NAME}-{VERSION}"
     path = DIST / f"{base}.tar.gz"
-    files = [ROOT / "pyproject.toml", ROOT / "README.md", ROOT / "build_dist.py", *sources()]
+    files = [ROOT / "pyproject.toml", ROOT / "README.md", ROOT / "LICENSE", ROOT / "build_dist.py",
+             *sources()]
     files += sorted(p for d in ("tests", "examples") for p in (ROOT / d).rglob("*")
                     if p.is_file() and "__pycache__" not in p.parts and ".pytest_cache" not in p.parts)
     with tarfile.open(path, "w:gz") as t:

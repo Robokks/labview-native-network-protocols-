@@ -15,7 +15,7 @@ from .types import (BOOLEAN, DBL, ERROR_CLUSTER, I32, U32, MESSAGE, PATH, STRING
                     VariantValue, parse_td,
                     pack_element, unpack_element)
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __all__ = ["connect", "SharedVariableClient", "DataSocketClient", "DataSocketItemBusy", "Session", "Reader", "Writer", "locate_port", "Frame", "FrameBuffer",
            "MsgType", "ProtocolError", "LinkRefused", "StreamClosed",
            "DataType", "DBL", "I32", "U32", "BOOLEAN", "STRING", "PATH", "LVPath", "ERROR_CLUSTER", "VARIANT", "Array", "Cluster", "MESSAGE", "RawVariant", "VariantValue", "parse_td",
