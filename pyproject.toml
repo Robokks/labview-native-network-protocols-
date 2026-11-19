@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nwstreams"
+version = "0.1.0"
+description = "Unofficial pure-Python clients for LabVIEW Network Streams, DataSocket and network Shared Variables"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering",
+  "Topic :: System :: Networking",
+]
+keywords = ["labview", "network streams", "datasocket", "shared variable", "ni-psp"]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
