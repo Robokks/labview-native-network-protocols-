@@ -51,8 +51,8 @@ against data LabVIEW 2026 sent:
 `nwstreams.parse_td()` turns a descriptor from the wire into one of these types. Unknown descriptors
 raise `NotImplementedError` rather than guessing.
 
-**Verification state.** DataSocket: every type above (25 cases) verified in both directions against
-LabVIEW. Network Streams: every type verified inside a Variant stream (LabVIEW → Python); as a
+**Verification state.** DataSocket and Shared Variables: every type above (25 cases) verified in both
+directions against LabVIEW. Network Streams: every type verified inside a Variant stream (LabVIEW → Python); as a
 stream's own element type only DBL, DBL[], String[], Variant, the example's clusters and I8 so far.
 
 ## DataSocket
@@ -82,8 +82,9 @@ with nw.SharedVariableClient("Server Variables") as sv:   # one client per varia
     sv.write("Monitor Value 1", 0.25)
 ```
 
-Only DBL values are supported so far. The Shared Variable Engine port defaults to 59110; pass `port=`
-if yours differs.
+All types in the table above are supported (`write(name, value, dtype=...)`, e.g. `dtype=nw.I16`).
+The engine's port is found automatically (it moved between 59110 and 59111 on the test PC); pass
+`port=` to skip the search.
 
 ## Tests
 

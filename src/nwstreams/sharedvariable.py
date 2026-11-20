@@ -1,4 +1,4 @@
-"""Network-published Shared Variables (NI-PSP) client. Experimental, DBL values only.
+"""Network-published Shared Variables (NI-PSP) client. Experimental; 25 LabVIEW types verified.
 
 Talks to the Shared Variable Engine (tagsrv) with the same 'C7' Logos frames as Network
 Streams. Decoded from a capture of NI's 'Shared Variable' example and confirmed live
@@ -19,9 +19,13 @@ import struct
 import threading
 from typing import Optional
 
+from .datasocket import _ds_type, _user_attrs, _write_type
 from .framing import Frame, FrameBuffer, ProtocolError, lv_string
+from .types import (BOOLEAN, DBL, I8, I16, I32, SGL, STRING, TIMESTAMP, U8, U16, U32, DataType,
+                    LVVariant, infer_type, parse_td_body)
 
-SVE_PORT = 59110          # tagsrv on the test PC; pass port= if yours differs
+SVE_PORT = 59110          # tagsrv's port when first seen; it can move (59111 later)
+SVE_PORTS = tuple(range(59110, 59121))   # tried in turn when no port is given
 CTX_PROC, CTX_ITEMS = 0x03E9, 0x03EA
 _PARAMS = bytes.fromhex("d00700000a000000")
 # Context + user block sent with the control-environment service, copied from the capture.
@@ -35,16 +39,76 @@ class Msg:
     OPENED, PROPERTIES, UPDATE, CLOSED = 0x65, 0x66, 0x68, 0x6A
 
 
+# ---- value records ----
+# record := u32 n (bytes that follow) + u32 kind + data. Seen live with LabVIEW 2026
+# (TypeTest Variables, 25 types). Low 16 bits of kind = encoding:
+#   0x0003  number sent as f64; high 16 bits = the variable's type (_NUM_SUBTYPES)
+#   0x0002  Boolean, 1 byte (01 = true)
+#   0x1005  String: u32 length + bytes (no padding)
+#   0x100f  Timestamp: u64 fraction + i64 seconds since 1904
+#   0x1013  anything else: a self-describing variant (u32 len + descriptor + value),
+#           encoded as DataSocket does (2-D arrays column-major, variant attributes
+#           carried in the value's descriptor)
+K_NUM, K_BOOL, K_STRING, K_TIME, K_VARIANT = 0x0003, 0x0002, 0x1005, 0x100F, 0x1013
+_NUM_SUBTYPES = {0: DBL, 1: I8, 2: I16, 3: I32, 4: U8, 5: U16, 6: U32, 7: SGL}
+_NUM_KIND = {t: (sub << 16) | K_NUM for sub, t in _NUM_SUBTYPES.items()}
+_INT_TYPES = (I8, I16, I32, U8, U16, U32)
+
+
 def dbl_record(v: float) -> bytes:
-    """Value record seen for DBL: u32 12 + u32 3 + f64. (Meaning of 3 not decoded.)"""
+    """DBL record: u32 12 + u32 3 + f64."""
     return struct.pack("<IId", 12, 3, v)
 
 
+def encode_record(value, dtype: Optional[DataType] = None) -> bytes:
+    """Value record for a write. dtype: the variable's LabVIEW type (inferred if omitted)."""
+    if dtype is None and not isinstance(value, LVVariant):
+        dtype = infer_type(value)
+    if dtype in _NUM_KIND:
+        body = struct.pack("<Id", _NUM_KIND[dtype], float(value))
+    elif dtype is BOOLEAN:
+        body = struct.pack("<IB", K_BOOL, 1 if value else 0)
+    elif dtype is STRING:
+        s = value.encode("latin-1") if isinstance(value, str) else bytes(value)
+        body = struct.pack("<II", K_STRING, len(s)) + s
+    elif dtype is TIMESTAMP:
+        body = struct.pack("<I", K_TIME) + TIMESTAMP.pack(value)
+    else:
+        t, v = _write_type(value, dtype)
+        body = struct.pack("<I", K_VARIANT) + _variant_bytes(t, v)
+    return struct.pack("<I", len(body)) + body
+
+
+def _variant_bytes(t: DataType, v) -> bytes:
+    inner = t.td_body() + t.pack(v)
+    return struct.pack("<I", 4 + len(inner)) + inner
+
+
 def parse_record(p: bytes, o: int):
+    """Decode a value record; unknown encodings come back as ('raw', kind, data)."""
     n, kind = struct.unpack_from("<II", p, o)
-    if n == 12 and kind == 3:
-        return struct.unpack_from("<d", p, o + 8)[0]
-    return ("raw", kind, p[o + 8:o + 4 + n])   # not decoded yet
+    data, low = p[o + 8:o + 4 + n], kind & 0xFFFF
+    try:
+        if low == K_NUM and len(data) == 8:
+            x = struct.unpack_from("<d", data, 0)[0]
+            t = _NUM_SUBTYPES.get(kind >> 16, DBL)
+            return int(x) if t in _INT_TYPES else x
+        if low == K_BOOL and len(data) >= 1:
+            return data[0] != 0
+        if low == K_STRING:
+            m = struct.unpack_from("<I", data, 0)[0]
+            return data[4:4 + m].decode("latin-1")
+        if low == K_TIME and len(data) == 16:
+            return TIMESTAMP.unpack(data, 0)[0]
+        if low == K_VARIANT:
+            t, q = parse_td_body(data, 4)
+            t = _ds_type(t)
+            v = t.unpack(data, q)[0]
+            attrs = _user_attrs(t)
+            return LVVariant(v, attrs) if attrs is not None else v
+    except (NotImplementedError, struct.error, IndexError, UnicodeDecodeError):
+        pass
+    return ("raw", kind, data)
 
 
 def parse_psp_url(url: str, default_lib: Optional[str] = None):
@@ -74,19 +138,37 @@ class _Item:
 class SharedVariableClient:
     """One session to the Shared Variable Engine process of one variable library."""
 
-    def __init__(self, library: str, host: str = "127.0.0.1", port: int = SVE_PORT,
+    def __init__(self, library: str, host: str = "127.0.0.1", port: Optional[int] = None,
                  machine: Optional[str] = None, timeout: float = 5.0):
+        """port=None: try SVE_PORTS in turn and keep the first port whose engine serves
+        *library*. The engine's port moved from 59110 to 59111 on the test PC after its
+        NI services restarted, so a fixed default is not reliable."""
         self.library = library
         self.machine = (machine or socket.gethostname()).upper()
         self.timeout = timeout
-        self._sock = socket.create_connection((host, port), timeout=timeout)
-        self._fb = FrameBuffer()
-        self._pending: "collections.deque[Frame]" = collections.deque()
         self._lock = threading.Lock()
         self._ids = itertools.count(1)
         self._items: "dict[int, _Item]" = {}
         self._by_name: "dict[str, _Item]" = {}
-        self._handshake()
+        errors = []
+        for p in ([port] if port else SVE_PORTS):
+            self._fb = FrameBuffer()
+            self._pending: "collections.deque[Frame]" = collections.deque()
+            try:
+                self._sock = socket.create_connection((host, p), timeout=timeout)
+            except OSError as exc:
+                errors.append(f"{p}: {exc}")
+                continue
+            try:
+                self._handshake()
+                self.port = p
+                break
+            except (OSError, ProtocolError) as exc:
+                errors.append(f"{p}: {exc}")
+                self._sock.close()
+        else:
+            raise ProtocolError(f"no Shared Variable Engine on {host} serves library "
+                                f"{library!r} (deployed?): " + "; ".join(errors))
         self._closed = False
         threading.Thread(target=self._rx, name="sharedvariable-rx", daemon=True).start()
 
@@ -123,10 +205,13 @@ class SharedVariableClient:
     def latest(self, name: str):
         return self._item(name).latest
 
-    def write(self, name: str, value: float) -> None:
+    def write(self, name: str, value, dtype: Optional[DataType] = None) -> None:
+        """Write a value. dtype: the variable's LabVIEW type, e.g. nw.I16 or
+        nw.Array(nw.I32, 2); inferred from the value when omitted (float -> DBL,
+        int -> I32, str -> String, ...)."""
         it = self._item(name)
-        self._send(Frame(Msg.WRITE, struct.pack("<III", it.handle, it.id, 1) + dbl_record(float(value)),
-                         src=CTX_ITEMS, dst=CTX_ITEMS))
+        self._send(Frame(Msg.WRITE, struct.pack("<III", it.handle, it.id, 1)
+                         + encode_record(value, dtype), src=CTX_ITEMS, dst=CTX_ITEMS))
 
     def properties(self, name: str) -> bytes:
         return self._item(name).properties
@@ -213,6 +298,7 @@ class SharedVariableClient:
                     elif t == Msg.PROPERTIES:
                         it.properties = p[4:]
                     elif t == Msg.UPDATE and f.flags == 8:
+                        it.last_raw = p[4:]
                         v = parse_record(p, 4)
                         it.latest = v
                         it.values.put(v)
