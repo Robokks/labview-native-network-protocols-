@@ -79,3 +79,6 @@ plotted the 0-39 ramp (user confirmed, 2026-11-20). DataSocket therefore works w
 directions across two PCs. Adding only the IP 169.254.16.201 wasn't enough
 on a direct link without DNS.
 - After the last writer of a dynamically created item disconnects, the server resets the item to `0`.
+
+**LabVIEW 2016 (32-bit)**, same two-PC setup (2026-11-20): Writer.vi → Python 51 arrays in 5 s; Python →
+Reader.vi 587 ramps in 60 s, all acknowledged and read back exactly, plotted by Reader.vi (user confirmed).

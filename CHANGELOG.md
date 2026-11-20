@@ -14,6 +14,9 @@ All versions are alphas, verified live on LabVIEW 2026 (64-bit, Windows) with NI
   write without DefaultWriters permission). It used to show up as a misleading `DataSocketItemBusy`.
 - Verified with **LabVIEW 2020 (32-bit)** across two PCs: Network Streams (LabVIEW Host.vi ↔ Python
   Target) and DataSocket in both directions (Writer.vi → Python, Python → Reader.vi).
+- Verified with **LabVIEW 2016 (32-bit)**: its Target.vi on another PC with Python as Host (stream data
+  plus Set Frequency), its Host.vi with the Python Target, and DataSocket both
+  ways (Writer.vi → Python, Python → Reader.vi). Docs: pass `url_host=` for a Target on another PC.
 
 ## 0.3.0
 

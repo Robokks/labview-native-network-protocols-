@@ -145,8 +145,9 @@ the clients against stand-in servers, so no LabVIEW is needed.
 
 ## Status
 
-Version 0.3.0, alpha. Verified live with LabVIEW 2026 (64-bit); the Python Target also with LabVIEW
-2020 (32-bit) Host.vi across two PCs. See
+Version 0.3.0, alpha. Verified live with LabVIEW 2026 (64-bit), LabVIEW 2020 (32-bit) and LabVIEW 2016
+(32-bit). Network Streams: Python Host ↔ LabVIEW Target (2026, 2016) and LabVIEW Host ↔ Python Target
+(2026, 2020, 2016); DataSocket both ways (2026, 2020, 2016). See
 [CHANGELOG.md](CHANGELOG.md) for what's new.
 
 Not supported yet: connecting to LabVIEW endpoints created without a remote URL (they answer with an

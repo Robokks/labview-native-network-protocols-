@@ -190,3 +190,10 @@ about 50 elements/s and the initial `Set Frequency 10.1` received.
 - **LabVIEW 2020 (32-bit) Host.vi** works with the same Python Target unchanged (2026-11-20): same
   lookup, link, credit and writer-ready sequence as LabVIEW 2026 (64-bit). Waves plotted, frequency
   commands applied, Read Backlog 0 at "Slow (20 ms)".
+- **LabVIEW 2016 (32-bit) Target.vi** on another PC works with the Python **client** (Python as Host)
+  (2026-11-20): that PC's locator reported NW_STREAMS on port **59115**; 100 elements of 2 x 2000
+  samples at a median 20.7 ms; `Set Frequency 25` applied on Target.vi. For a Target on another PC
+  pass `url_host=<that PC's address>`, so the endpoint URLs read `ni.dex://<target>/data/writer`.
+- **LabVIEW 2016 (32-bit) Host.vi** works with the Python Target (2026-11-20): it sends the locator
+  lookup twice (2020/2026 once), then the same link, credit and writer-ready sequence. Waves plotted,
+  frequency knob applied (user confirmed).
