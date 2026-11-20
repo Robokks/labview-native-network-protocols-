@@ -7,7 +7,8 @@ from .codecs import (TD_MESSAGE_CLUSTER, TD_WAVEFORM_ARRAY_DBL, WAVEFORM_ARRAY, 
                      encode_waveform_array)
 from .framing import Frame, FrameBuffer, MsgType, ProtocolError
 from .locator import locate_port
-from .datasocket import DataSocketAccessDenied, DataSocketClient, DataSocketItemBusy
+from .datasocket import (DataSocketAccessDenied, DataSocketClient, DataSocketItemBusy,
+                         DataSocketMessage)
 from .sharedvariable import RawRecord, SharedVariableClient
 from .jki import JKI_MESSAGE, JKIEndpoint, JKIMessage
 from .locator import list_contexts
@@ -19,7 +20,7 @@ from .types import (BOOLEAN, CDB, CSG, DBL, ERROR_CLUSTER, EXT, I8, I16, I32, I6
                     pack_element, unpack_element)
 
 __version__ = "0.4.0"
-__all__ = ["connect", "SharedVariableClient", "RawRecord", "JKIEndpoint", "JKIMessage", "JKI_MESSAGE", "list_contexts", "DataSocketClient", "DataSocketItemBusy", "DataSocketAccessDenied", "Session", "Reader", "Writer", "locate_port", "Frame", "FrameBuffer",
+__all__ = ["connect", "SharedVariableClient", "RawRecord", "JKIEndpoint", "JKIMessage", "JKI_MESSAGE", "list_contexts", "DataSocketClient", "DataSocketMessage", "DataSocketItemBusy", "DataSocketAccessDenied", "Session", "Reader", "Writer", "locate_port", "Frame", "FrameBuffer",
            "MsgType", "ProtocolError", "LinkRefused", "StreamClosed",
            "DataType", "DBL", "I32", "U32", "BOOLEAN", "STRING", "PATH", "LVPath", "ERROR_CLUSTER", "VARIANT", "Array", "Cluster", "MESSAGE", "RawVariant", "VariantValue", "parse_td",
            "WAVEFORM_ARRAY", "Waveform", "pack_element", "unpack_element",

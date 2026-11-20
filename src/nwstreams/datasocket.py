@@ -85,6 +85,71 @@ class DataSocketAccessDenied(PermissionError):
     Manager > Permission Groups), or read with MODE_READ (3)."""
 
 
+class DataSocketMessage(tuple):
+    """An entry of ``DataSocketClient.other``: a message the client did not handle.
+
+    It is still the 2-tuple ``(dtype, value)`` it was before 0.4.1, so ``t, v = msg`` works.
+    For a message that could not be decoded, dtype is None and value is the raw message bytes.
+    Extra attributes:
+      op    the opcode (first I32), or None if it could not be read
+      item  the item name the message belongs to, or None if it carries none / unreadable
+      error the decode error as text, or None if the message decoded
+    """
+
+    def __new__(cls, dtype, value, op=None, item=None, error=None):
+        self = super().__new__(cls, (dtype, value))
+        self.op, self.item, self.error = op, item, error
+        return self
+
+    @property
+    def dtype(self):
+        return self[0]
+
+    @property
+    def value(self):
+        return self[1]
+
+    @property
+    def decoded(self) -> bool:
+        return self[0] is not None
+
+    def __repr__(self):
+        return (f"DataSocketMessage(dtype={self[0]!r}, value={self[1]!r}, op={self.op!r}, "
+                f"item={self.item!r}, error={self.error!r})")
+
+
+_DECODE_ERRORS = (NotImplementedError, struct.error, IndexError, UnicodeDecodeError, ValueError)
+_TD_I32, _TD_STRING = I32.td_body(), STRING.td_body()
+
+
+def _peek_op_item(b: bytes):
+    """(op, item) of a message whose value type can't be decoded, read without decoding it.
+
+    Every message is a cluster whose fields are length-prefixed descriptors, so the
+    descriptors can be skipped by length. When the first field is an I32 (the opcode) and
+    the second a String (the item name, as in 6 = value, 12 = open ack, 51 = denied), both
+    are read from the start of the value data. Returns (None, None) when not possible."""
+    try:
+        if bytes(b[4:6]) != b"\x01\x08":
+            return None, None
+        n = struct.unpack_from("<H", b, 6)[0]
+        p, codes = 8, []
+        for _ in range(n):
+            ln = struct.unpack_from("<I", b, p)[0]
+            if ln < 6:
+                return None, None
+            codes.append(bytes(b[p + 4:p + 6]))
+            p += ln
+        if not codes or codes[0] != _TD_I32:
+            return None, None
+        op, p = I32.unpack(b, p)
+        if len(codes) < 2 or codes[1] != _TD_STRING:
+            return op, None
+        return op, STRING.unpack(b, p)[0]
+    except _DECODE_ERRORS:
+        return None, None
+
+
 def _msg(t: DataType, v) -> bytes:
     return VARIANT.pack(VariantValue(t, v))
 
@@ -108,10 +173,11 @@ class DataSocketClient:
         self._denied: "set[str]" = set()
         self._values: "dict[str, queue.Queue]" = {}
         self.latest: "dict[str, Any]" = {}
-        self.other: "queue.Queue" = queue.Queue()      # undecoded / unknown messages
+        # messages not handled above, as DataSocketMessage ((dtype, value) + .op .item .error)
+        self.other: "queue.Queue[DataSocketMessage]" = queue.Queue()
         self._send(_HELLO, (1, 3))
         self._send(_HELLO, (2, 3))
-        t, v = self._read_one()
+        t, v = self._read_one()[:2]
         if v != (9, 3):
             raise IOError(f"unexpected DataSocket hello reply: {v!r}")
         self._closed = False
@@ -211,15 +277,15 @@ class DataSocketClient:
                         t, p = parse_td_body(b, 4)
                         t = _ds_type(t)
                         v = t.unpack(b, p)[0]
-                    except NotImplementedError:
-                        return None, b
+                    except _DECODE_ERRORS as exc:
+                        return None, b, exc
                     # value message (6, item, value): give back attributes LabVIEW put
                     # in the value's descriptor as an LVVariant
                     if isinstance(t, Cluster) and len(t.fields) == 3 and v and v[0] == 6:
                         attrs = _user_attrs(t.fields[2])
                         if attrs is not None:
                             v = (v[0], v[1], LVVariant(v[2], attrs))
-                    return t, v
+                    return t, v, None
             chunk = self._sock.recv(65536)
             if not chunk:
                 raise ConnectionError("DataSocket server closed the connection")
@@ -229,7 +295,7 @@ class DataSocketClient:
         self._sock.settimeout(None)
         try:
             while True:
-                t, v = self._read_one()
+                t, v, err = self._read_one()
                 op = v[0] if t is not None and isinstance(v, tuple) and v else None
                 if op == 12:
                     self._opened.setdefault(v[1], threading.Event()).set()
@@ -245,8 +311,12 @@ class DataSocketClient:
                 elif op == 51 and len(v) > 1:     # access denied for this item
                     self._denied.add(v[1])
                     self._opened.setdefault(v[1], threading.Event()).set()
+                elif t is None:                   # undecodable: keep the bytes and the item
+                    op, item = _peek_op_item(v)
+                    self.other.put(DataSocketMessage(None, v, op, item, f"{type(err).__name__}: {err}"))
                 else:
-                    self.other.put((t, v))
+                    item = v[1] if isinstance(v, tuple) and len(v) > 1 and isinstance(v[1], str) else None
+                    self.other.put(DataSocketMessage(t, v, op, item))
         except (OSError, ConnectionError):
             pass
         finally:

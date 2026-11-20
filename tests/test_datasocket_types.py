@@ -87,3 +87,79 @@ def test_access_denied_opcode_51():
         except nw.DataSocketAccessDenied as e:
             assert "DefaultWriters" in str(e)
         assert ds.open("wave1") == "wave1"                # MODE_READ (3) is accepted
+
+
+# ---- messages the client can't handle land in client.other with their item (0.4.1) ----
+
+def _undecodable_value_msg(item):
+    """A (6, item, value) push whose value type has a descriptor code nwstreams doesn't know."""
+    good = _msg(Cluster(I32, STRING, nw.DBL), (6, item, 1.0))
+    td = nw.DBL.td()
+    assert good.count(td) == 1
+    return good.replace(td, td[:4] + b"\x7f\x7f")
+
+
+def test_peek_op_item_reads_item_without_decoding_value():
+    from nwstreams.datasocket import _peek_op_item
+    msg = _undecodable_value_msg("types_unknown")
+    try:
+        parse_td_body(msg, 4)
+        raise AssertionError("test message should not decode")
+    except NotImplementedError:
+        pass
+    assert _peek_op_item(msg) == (6, "types_unknown")
+    assert _peek_op_item(ARR2D) == (6, "types_i32arr2d")
+    assert _peek_op_item(_msg(Cluster(I32), (10,))) == (10, None)
+    assert _peek_op_item(b"\x08\x00\x00\x00\x02\x09\x00\x00") == (None, None)   # not a cluster
+    assert _peek_op_item(msg[:12]) == (None, None)                               # truncated
+
+
+def test_datasocket_message_is_still_a_2_tuple():
+    m = nw.DataSocketMessage(None, b"abc", op=6, item="wave1", error="NotImplementedError: x")
+    t, v = m
+    assert (t, v) == (None, b"abc") and m == (None, b"abc")
+    assert (m.dtype, m.value, m.op, m.item, m.decoded) == (None, b"abc", 6, "wave1", False)
+
+
+def _fake_ds_pushing(messages):
+    """DataSocket server: answers hello and opens, then pushes the given raw messages."""
+    import socket, struct, threading
+    srv = socket.socket(); srv.bind(("127.0.0.1", 0)); srv.listen(1)
+    def run():
+        c, _ = srv.accept(); buf = b""
+        try:
+            while True:
+                d = c.recv(65536)
+                if not d:
+                    break
+                buf += d
+                while len(buf) >= 4 and len(buf) >= struct.unpack_from("<I", buf)[0]:
+                    n = struct.unpack_from("<I", buf)[0]
+                    v = nw.VARIANT.unpack(buf[:n], 0)[0]; buf = buf[n:]
+                    if v == (2, 3):
+                        c.sendall(_msg(Cluster(I32, I32), (9, 3)))
+                    elif v[0] == 4:
+                        c.sendall(_msg(Cluster(I32, STRING, I32), (12, v[1], v[2])))
+                        for m in messages:
+                            c.sendall(m)
+        except OSError:
+            pass
+        finally:
+            c.close(); srv.close()
+    threading.Thread(target=run, daemon=True).start()
+    return srv.getsockname()[1]
+
+
+def test_undecodable_push_goes_to_other_with_item():
+    good = _msg(Cluster(I32, STRING, nw.DBL), (6, "wave1", 2.5))
+    port = _fake_ds_pushing([_undecodable_value_msg("wave1"), _msg(Cluster(I32), (10,)), good])
+    with nw.DataSocketClient(port=port, timeout=2) as ds:
+        ds.open("wave1")
+        assert ds.read("wave1") == 2.5                  # a bad message doesn't stop the client
+        bad = ds.other.get(timeout=2)
+        assert isinstance(bad, nw.DataSocketMessage)
+        assert bad.dtype is None and bad.value == _undecodable_value_msg("wave1")
+        assert (bad.op, bad.item) == (6, "wave1") and "7f7f" in bad.error
+        t, v = ds.other.get(timeout=2)                  # decoded but unknown opcode
+        assert v == (10,) and t is not None
+        assert not ds.closed.is_set()

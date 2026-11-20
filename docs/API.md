@@ -93,8 +93,14 @@ Connects to the NI DataSocket Server (`cwdss.exe`). For a server on another PC, 
 | `drain(url) -> list` | Every value pushed since the last read or drain, without waiting. Raises `ConnectionError` once the connection is gone and nothing is left. |
 | `write(url, value, dtype=None, wait_ack=True)` | Write a value. The type is inferred for float, str and lists of str, so pass `dtype=` otherwise. Waits for the server's acknowledgement. |
 | `latest` | `dict` of the newest value per item. |
+| `other` | `queue.Queue` of messages the client didn't handle, as `nw.DataSocketMessage`. |
 | `closed` | `threading.Event`, set when the connection is gone. |
 | `close()` | Close all items and disconnect. |
+
+`DataSocketMessage` is the 2-tuple `(dtype, value)`, so `t, v = msg` still works, plus `.op`, `.item`
+and `.error`. A message the client couldn't decode has `dtype` `None` and the raw message bytes as
+`value`; `.item` is the item it belongs to when the message carries one (for example a pushed value of
+an unsupported type), and `.error` says why decoding failed.
 
 **Exception:** `DataSocketAccessDenied`, a subclass of `PermissionError`. The server refused the open
 (opcode 51). A server on another PC allows writing only from its own localhost by default, so add this
