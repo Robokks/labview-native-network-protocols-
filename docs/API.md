@@ -1,4 +1,4 @@
-# API reference (nwstreams 0.3.1)
+# API reference (nwstreams 0.4.0)
 
 ```python
 import nwstreams as nw

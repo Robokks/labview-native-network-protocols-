@@ -2,7 +2,7 @@
 
 All versions are alphas, verified live on LabVIEW 2026 (64-bit, Windows) with NI's example projects.
 
-## Unreleased
+## 0.4.0
 
 ### Added
 - **Network Streams contexts:** `connect(..., context=, local_context=)`, `locate_port(..., context=)`

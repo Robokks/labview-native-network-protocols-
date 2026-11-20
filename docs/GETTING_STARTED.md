@@ -8,7 +8,7 @@ These steps use NI's own LabVIEW example projects, which ship with LabVIEW
 On Windows the `pip` command is often not on PATH, so run pip through the Python launcher:
 
 ```powershell
-py -m pip install https://github.com/Robokks/labview-native-network-protocols-/releases/download/v0.3.1/nwstreams-0.3.1-py3-none-any.whl
+py -m pip install https://github.com/Robokks/labview-native-network-protocols-/releases/download/v0.4.0/nwstreams-0.4.0-py3-none-any.whl
 py -c "import nwstreams; print(nwstreams.__version__)"
 ```
 
