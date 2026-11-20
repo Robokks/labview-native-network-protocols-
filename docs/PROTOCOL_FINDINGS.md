@@ -164,3 +164,26 @@ New rules:
 - **Live check, cluster Target (2026-11-19):** 487 elements / 10 s, 0 decode errors, median gap 19.96 ms
   (max 57.7 ms), Set Frequency sent, both links closed with acknowledgement. Values included a 5- and
   6-element Boolean array, error {true, 65610, "hjgfyjfydtydgdgd"} and a 13×15 2-D array.
+
+## 7. Python as Target, LabVIEW as Host (2026-11-20)
+
+`examples/python_target.py` (offline bundle `python_target_bundle.zip`) answers Host.vi's locator lookup on
+TCP 2343 and serves the stream. **Confirmed live:** the unchanged Host.vi on a second PC (Target IP
+Address = the Python PC, over a direct USB-Ethernet link) plotted Python's sine and square waves, with
+about 50 elements/s and the initial `Set Frequency 10.1` received.
+
+- **Writer-ready ordering:** the Target (writer) must send `0x04` WRITER_READY **when the data link is
+  confirmed (`0x03`)**. LabVIEW's reader waits for it before granting credits (`0x05`). Sending `0x04`
+  only after credits (which suited the Python client) leaves LabVIEW waiting forever.
+- Port 2343 on the Python machine must be free: NI's "NI PSP Service Locator" (service `lkClassAds`)
+  holds it on every address. On the Host's PC the locator must keep running, because LabVIEW's Network
+  Streams engine needs it to create endpoints. If it was stopped when Network Streams was first used,
+  restart LabVIEW.
+- Windows Firewall must allow inbound TCP 2343 and the stream port on the Python machine.
+- **Pacing:** wait the period *after* each write (like LabVIEW's "Wait (ms)" in Target.vi), not a fixed
+  catch-up schedule. With a fixed 20 ms schedule Python sent exactly 50 elements/s, Host.vi (20 ms wait +
+  read + draw, about 21–22 ms per loop) fell behind, and Read Backlog filled up to its 100-element buffer
+  (no loss, because credit flow control paused Python, but about 2 s of latency). With the wait after
+  each write (about 45/s), Read Backlog stays about 0 at "Slow (20 ms)" (confirmed live).
+- Host.vi's `Set Frequency` commands arrive on every knob change (24 in about 1 s while turning) and
+  are applied to the next element.

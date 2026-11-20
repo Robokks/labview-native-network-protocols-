@@ -50,8 +50,23 @@ with nw.connect() as s:                     # finds the NW_STREAMS port via the 
         sine, square = data.read(timeout=5)  # list of nw.Waveform (t0, dt, y)
 ```
 
-Python connects to endpoints that LabVIEW created and waits on (the client role). Acting as the
-endpoint LabVIEW connects to (Python as Target.vi) isn't supported yet.
+Here Python connects to endpoints that LabVIEW created and waits on (the client role).
+
+### Python as Target.vi (LabVIEW Host.vi connects to Python)
+
+`examples/python_target.py` takes the server role. It answers Host.vi's locator lookup on TCP 2343 and
+serves `/data/writer` (waveforms) and `/command/reader` (`Set Frequency`). It was verified live with the
+**unchanged** Host.vi on another PC (Host.vi's Target IP Address set to the Python PC): waves plotted,
+frequency commands applied, and Read Backlog about 0 at 20 ms.
+
+```powershell
+py examples\python_target.py --stream-port 59200 --seconds 600
+```
+
+Requirements on the Python PC: port 2343 must be free. NI's **NI PSP Service Locator** service holds it on
+every address, so run the script on a PC without NI software, or stop that service while testing. Inbound
+TCP 2343 and the stream port must be allowed in the firewall. See
+[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md#5-python-as-targetvi-labview-hostvi-connects-to-python).
 
 ### Data types
 
@@ -133,8 +148,8 @@ the clients against stand-in servers, so no LabVIEW is needed.
 Version 0.2.0, alpha. Verified live on one Windows PC with LabVIEW 2026. See
 [CHANGELOG.md](CHANGELOG.md) for what's new.
 
-Not supported yet: Python as the Network Streams endpoint that LabVIEW connects to (Target role), and
-connecting to LabVIEW endpoints created without a remote URL.
+Not supported yet: connecting to LabVIEW endpoints created without a remote URL (they answer with an
+undecoded `0x0C` handshake). The Python Target is an example script, not yet a library class.
 
 ## License
 

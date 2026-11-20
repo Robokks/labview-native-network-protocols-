@@ -43,6 +43,32 @@ Target.vi before every run**.
 3. To **write**: stop Server.vi (it overwrites the values every 500 ms), keep a client VI open, then run
    `py examples\shared_variable_demo.py 0.25 0.75`. The client's gauges show 0.25 and 0.75.
 
+## 5. Python as Target.vi (LabVIEW Host.vi connects to Python)
+
+Python plays the part of `Simple Network Streams - Target.vi`, and the unchanged Host.vi connects to it.
+
+**The Python PC must have TCP port 2343 free.** NI's **NI PSP Service Locator** (service `lkClassAds`)
+holds 2343 on every address of a PC with NI software. Two working setups:
+
+- **Two PCs (verified):** LabVIEW Host.vi on PC A and Python on PC B, connected by network or a direct
+  cable (for example a USB-Ethernet adapter). On PC B stop the NI PSP Service Locator (or use a PC
+  without NI software). On PC A it **must keep running**, because LabVIEW's Network Streams need it to
+  create endpoints.
+- **Python PC without internet:** copy the script with the `nwstreams` folder next to it. Nothing has to be
+  installed apart from Python 3.9+.
+
+Steps:
+1. On the Python PC, allow inbound TCP 2343 and 59200 in the firewall, for example from an
+   administrator PowerShell:
+   `New-NetFirewallRule -DisplayName "nwstreams Python Target" -Direction Inbound -Protocol TCP -LocalPort 2343,59200 -Action Allow`
+2. Run `py examples\python_target.py --stream-port 59200 --seconds 600`. It prints
+   `locator listening on TCP 2343` and `stream server listening on TCP 59200`.
+3. On the LabVIEW PC, set Host.vi's **Target IP Address** to the Python PC's address and run Host.vi.
+   The graph shows Python's sine and square waves, and the Frequency knob changes them.
+
+If LabVIEW's Network Streams were first used while the NI PSP Service Locator was stopped, Host.vi hangs
+in Create Endpoint. Start the service and restart LabVIEW.
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |

@@ -2,6 +2,15 @@
 
 All versions are alphas, verified live on LabVIEW 2026 (64-bit, Windows) with NI's example projects.
 
+## Unreleased
+
+### Added
+- **Python as Network Streams Target** (`examples/python_target.py`): a locator responder on TCP 2343
+  plus a stream server, so the unchanged LabVIEW Host.vi connects to Python. Verified live across two
+  PCs: waveforms plotted on Host.vi, `Set Frequency` commands applied, Read Backlog about 0 at 20 ms.
+- Docs: Getting Started section 5 (two-PC setup, firewall, service locator) and Protocol Findings
+  section 7 (writer-ready ordering, pacing).
+
 ## 0.2.0
 
 ### Added
