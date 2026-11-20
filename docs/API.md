@@ -22,6 +22,21 @@ Opens a session to LabVIEW's Network Streams listener.
 | `retry_for` | Seconds to keep retrying while LabVIEW isn't reachable yet. |
 | `timeout` | Socket and handshake timeout in seconds. |
 
+Named contexts: `connect(host, context="RT", local_context="PC")` opens service `rt/NW_STREAMS` and
+builds URLs `ni.dex://<url_host>:RT/...` (remote) and `:PC/...` (Python's own). `nw.list_contexts(host)`
+returns `{context: port}` from NI's locator. With `retry_for=`, `connect` waits until the context appears.
+
+### `nw.JKIEndpoint(host, my_name, remote_name, *, retry_for=30.0, url_host=None, timeout=5.0)`
+A JKI Network Stream 2-way endpoint (Python connects to the LabVIEW endpoint `remote_name`).
+
+| Member | Description |
+|---|---|
+| `send(command, arguments=None, msg_id=0, wait_ack=False, timeout=5.0) -> int` | Send a command; with `wait_ack=True` block until acknowledged. Returns the message ID. |
+| `receive(timeout=None) -> JKIMessage` | Next command (`.command`, `.arguments`, `.msg_id`, `.wants_ack`). Commands asking for an ack are acknowledged automatically. |
+| `close()` | Close both links and the session. |
+
+`nw.JKI_MESSAGE` is the element type `Cluster(Cluster(STRING, VARIANT, I32), BOOLEAN, I32)`.
+
 ### `Session`
 | Method | Description |
 |---|---|

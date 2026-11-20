@@ -2,6 +2,15 @@
 
 All versions are alphas, verified live on LabVIEW 2026 (64-bit, Windows) with NI's example projects.
 
+## Unreleased
+
+### Added
+- **Network Streams contexts:** `connect(..., context=, local_context=)`, `locate_port(..., context=)`
+  and `list_contexts()`. Endpoints in named contexts (`ni.dex://host:CTX/name`) are reachable with NI's
+  locator running.
+- **JKI Network Stream:** `nwstreams.jki` (`JKIEndpoint`, `JKI_MESSAGE`). Verified live with JKI's 2-way
+  example in LabVIEW 2020: acknowledged commands both ways. 5 tests against a capture of the example.
+
 ## 0.3.1
 
 ### Changed

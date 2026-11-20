@@ -197,3 +197,18 @@ about 50 elements/s and the initial `Set Frequency 10.1` received.
 - **LabVIEW 2016 (32-bit) Host.vi** works with the Python Target (2026-11-20): it sends the locator
   lookup twice (2020/2026 once), then the same link, credit and writer-ready sequence. Waves plotted,
   frequency knob applied (user confirmed).
+
+## 8. Contexts and JKI Network Stream (2026-11-20, LabVIEW 2020)
+
+- A **context** is the part after `:` in `ni.dex://host:CTX/endpoint`. The session's `E3` service is
+  `<ctx lower-case>/NW_STREAMS` (the default context is `__NI_DEFAULT_STREAM_LISTENER_NAME__/NW_STREAMS`).
+- Every context is its own locator entry: `str(ctx) str("NW_STREAMS") str("NI") str("1.1.0.0") ... u16 BE port`;
+  all contexts of one LabVIEW share its listener port (59114 here).
+- LabVIEW **registers** contexts with NI's locator over local IPC, not TCP or UDP (nothing in the capture), so
+  Python can't register one; it can connect to any registered context with the locator running.
+- JKI's 2-way endpoint = context "My Name" with streams `<me>_Writer -> <remote>_Reader` and
+  `<remote>_Writer -> <me>_Reader`, buffer 20, element `Cluster(Cluster(String, Variant, I32), Boolean, I32)`
+  = {{Command, Arguments, Msg Id}, Wait for Ack?, Message ID}; ack = `(("Ack Response", empty, 0), False, id)`.
+  Standard link handshake (no `0x0C`) even though the RT endpoint has no remote address.
+- Live: Python as "PC" ↔ LabVIEW 2020 RT_Main.vi: 3 commands acknowledged, 13 received; RT_Main.vi showed
+  "Cmd From Python" (user confirmed).

@@ -90,6 +90,22 @@ raise `NotImplementedError` rather than guessing.
 directions against LabVIEW. Network Streams: every type verified inside a Variant stream (LabVIEW → Python); as a
 stream's own element type only DBL, DBL[], String[], Variant, the example's clusters and I8 so far.
 
+### JKI Network Stream (2-way endpoints) and contexts
+
+Endpoints of the JKI Network Stream library are Network Streams **contexts** named after the
+endpoint's "My Name". Python connects as one endpoint, with NI's locator running:
+
+```python
+with nw.JKIEndpoint("127.0.0.1", my_name="PC", remote_name="RT") as ep:   # RT_Main.vi running
+    ep.send("Cmd From Python", "hello", wait_ack=True)    # blocks until RT acknowledges
+    msg = ep.receive(timeout=5)                          # .command .arguments .msg_id
+```
+
+Verified live with JKI's 2-way example in LabVIEW 2020: acknowledged commands Python → RT, and
+commands RT → Python. Python can be the endpoint that connects (the one with a Remote IP Address);
+the waiting endpoint must be LabVIEW. For any named context use
+`nw.connect(host, context="RT", local_context="PC")`; `nw.list_contexts(host)` lists them.
+
 ## DataSocket
 
 ```python

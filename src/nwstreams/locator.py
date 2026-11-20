@@ -21,8 +21,10 @@ def _recv_until(sock: socket.socket, fb: FrameBuffer, pred, timeout: float):
                 return f
 
 
-def locate_port(host: str = "127.0.0.1", timeout: float = 3.0) -> int:
-    """Return the TCP port advertised for the NW_STREAMS service."""
+DEFAULT_CONTEXT = "__NI_DEFAULT_STREAM_LISTENER_NAME__"
+
+
+def _listing(host: str, timeout: float) -> bytes:
     with socket.create_connection((host, LOCATOR_PORT), timeout=timeout) as s:
         fb = FrameBuffer()
         s.sendall(Frame(MsgType.SESSION_OPEN, src=0x03F8, dst=0).encode())
@@ -39,15 +41,55 @@ def locate_port(host: str = "127.0.0.1", timeout: float = 3.0) -> int:
             s.sendall(Frame(MsgType.SESSION_CLOSE).encode())
         except OSError:
             pass
-    return parse_listing_port(listing)
+    return listing
 
 
-def parse_listing_port(listing: bytes) -> int:
-    i = listing.find(b"NW_STREAMS")
-    if i < 0:
-        raise ProtocolError("NW_STREAMS service not advertised")
-    o = i + len(b"NW_STREAMS")
-    for _ in range(2):  # vendor ("NI"), version ("1.1.0.0")
-        n = struct.unpack_from("<I", listing, o)[0]
-        o += 4 + n
-    return struct.unpack_from(">H", listing, o + 4)[0]
+def locate_port(host: str = "127.0.0.1", timeout: float = 3.0, context: str = None) -> int:
+    """Return the TCP port advertised for a Network Streams context.
+
+    context=None is LabVIEW's default context. A named context (e.g. "RT", as used by the JKI
+    Network Stream library's "My Name") is its own locator entry; the name is matched
+    case-insensitively (LabVIEW registers it in lower case)."""
+    return parse_listing_port(_listing(host, timeout), context)
+
+
+def list_contexts(host: str = "127.0.0.1", timeout: float = 3.0) -> "dict[str, int]":
+    """All Network Streams contexts the locator advertises, with their ports."""
+    return parse_listing_contexts(_listing(host, timeout))
+
+
+def parse_listing_contexts(listing: bytes) -> "dict[str, int]":
+    out, o = {}, 0
+    key = lv_string(b"NW_STREAMS")
+    while True:
+        i = listing.find(key, o)
+        if i < 0:
+            return out
+        # the context name is the length-prefixed string right before "NW_STREAMS"
+        name = None
+        for back in range(4, 260):
+            j = i - back
+            if j < 0:
+                break
+            n = struct.unpack_from("<I", listing, j)[0]
+            if n == back - 4:
+                name = listing[j + 4:i].decode("latin-1")
+                break
+        p = i + len(key)
+        for _ in range(2):  # vendor ("NI"), version ("1.1.0.0")
+            p += 4 + struct.unpack_from("<I", listing, p)[0]
+        if name is not None:
+            out[name] = struct.unpack_from(">H", listing, p + 4)[0]
+        o = i + len(key)
+
+
+def parse_listing_port(listing: bytes, context: str = None) -> int:
+    contexts = parse_listing_contexts(listing)
+    name = DEFAULT_CONTEXT if context is None else context.lower()
+    for k, port in contexts.items():
+        if k.lower() == name.lower():
+            return port
+    if context is None and contexts:          # older listings: take the first NW_STREAMS entry
+        return next(iter(contexts.values()))
+    raise ProtocolError(f"Network Streams context {name!r} not advertised "
+                        f"(advertised: {sorted(contexts)}); is that endpoint running?")

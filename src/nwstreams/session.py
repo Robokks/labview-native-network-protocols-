@@ -204,9 +204,15 @@ class Session:
 
     def __init__(self, host: str = "127.0.0.1", port: Optional[int] = None,
                  url_host: Optional[str] = None, timeout: float = 5.0,
-                 trace: Optional[Callable[[str, Frame], None]] = None):
+                 trace: Optional[Callable[[str, Frame], None]] = None,
+                 context: Optional[str] = None, local_context: Optional[str] = None):
+        """context: the REMOTE endpoints' Network Streams context (None = LabVIEW's default;
+        e.g. "RT" for a JKI endpoint named RT). local_context: the context named in Python's
+        own endpoint URLs (e.g. "PC"); defaults to context."""
         self.host = host
-        self.port = port or locate_port(host, timeout)
+        self.context = context
+        self.local_context = local_context if local_context is not None else context
+        self.port = port or locate_port(host, timeout, context)
         self.url_host = url_host or socket.gethostname().upper()
         self.timeout = timeout
         self.trace = trace
@@ -223,8 +229,13 @@ class Session:
         self._rx.start()
 
     # -- public API --
-    def url(self, path: str) -> str:
-        return path if path.startswith("ni.dex://") else f"ni.dex://{self.url_host}/{path.lstrip('/')}"
+    def url(self, path: str, local: bool = False) -> str:
+        """ni.dex://<url_host>[:<context>]/<path>; full ni.dex:// URLs pass through."""
+        if path.startswith("ni.dex://"):
+            return path
+        ctx = self.local_context if local else self.context
+        host = f"{self.url_host}:{ctx}" if ctx else self.url_host
+        return f"ni.dex://{host}/{path.lstrip('/')}"
 
     def open_reader(self, writer_url: str, reader_url: str, dtype: "DataType | bytes",
                     buffer_size: int = 100, decoder=None,
@@ -236,7 +247,7 @@ class Session:
             decoder = decoder or (lambda b, t=dtype: unpack_element(t, b))
         else:
             tail = dtype
-        r = Reader(self, self.url(writer_url), self.url(reader_url), tail, decoder=decoder)
+        r = Reader(self, self.url(writer_url), self.url(reader_url, local=True), tail, decoder=decoder)
         r.dtype = dtype if isinstance(dtype, DataType) else None
         self._register(r); r._open(timeout or self.timeout, wait_for_peer)
         return r
@@ -246,7 +257,7 @@ class Session:
                     wait_for_peer: float = 0.0) -> Writer:
         """Connect a writer to a LabVIEW reader endpoint."""
         tail = link_tail(dtype, buffer_size, ROLE_WRITER) if isinstance(dtype, DataType) else dtype
-        w = Writer(self, self.url(reader_url), self.url(writer_url), tail)
+        w = Writer(self, self.url(reader_url), self.url(writer_url, local=True), tail)
         w.dtype = dtype if isinstance(dtype, DataType) else None
         self._register(w); w._open(timeout or self.timeout, wait_for_peer)
         if not w._granted.wait(timeout or self.timeout):
@@ -306,7 +317,8 @@ class Session:
         self._send(Frame(MsgType.SESSION_OPEN, src=0x03F9, dst=0))
         self._expect(MsgType.SESSION_ACCEPT)
         self._send(Frame(MsgType.PARAMS, _PARAMS, flags=1, src=0x03F9, dst=0x03FA))
-        self._send(Frame(MsgType.SERVICE_OPEN, lv_string(SERVICE) + bytes.fromhex("e90302"),
+        service = (f"{self.context.lower()}/NW_STREAMS".encode("latin-1") if self.context else SERVICE)
+        self._send(Frame(MsgType.SERVICE_OPEN, lv_string(service) + bytes.fromhex("e90302"),
                          src=0x03F9, dst=0x03FA))
         self._expect(MsgType.PARAMS)
         reply = self._expect(MsgType.SERVICE_REPLY)
