@@ -13,8 +13,11 @@ and the value is a cluster whose first I32 is the opcode.
   (5, item)         close item          (10,)                not decoded yet
   (3,)              disconnect
 
-The open field is an access mode, not an id: LabVIEW's DataSocket Open sent 4 for "Write"
-and 7 for "Read" (the server ignored an open with 100). Probably bit flags, not verified.
+The open field is an access mode made of bit flags: 1 = read, 2 = subscribe (pushed updates),
+4 = write. LabVIEW's DataSocket Open sends 4 for "Write" and 7 for "Read". A server on ANOTHER
+machine refuses 7 (opcode 51, item looks empty) because by default the DataSocket Server allows
+writing only from localhost. Mode 3 (read + subscribe) works locally and remotely (tested with a
+LabVIEW 2020 writer on another PC), so it's the default here. Mode 2 gives only the current value.
 Behaviour seen live: opening an item pushes its current value at once (0 for a new item),
 and the server does not echo a write back to the connection that wrote it.
 The value inside 13/6 carries its own type descriptor, so any type nwstreams.types
@@ -75,6 +78,13 @@ class DataSocketItemBusy(TimeoutError):
     silent (no error message) while another client holds it. Seen live with LabVIEW."""
 
 
+class DataSocketAccessDenied(PermissionError):
+    """The server refused the open with opcode 51. Seen when a client on another PC opens an
+    item with the write bit (mode 4 or LabVIEW's 7): by default the DataSocket Server allows
+    writing only from localhost. Add this PC to the server's DefaultWriters (DataSocket Server
+    Manager > Permission Groups), or read with MODE_READ (3)."""
+
+
 def _msg(t: DataType, v) -> bytes:
     return VARIANT.pack(VariantValue(t, v))
 
@@ -95,6 +105,7 @@ class DataSocketClient:
         self._seq = itertools.count(1)
         self._acks: "dict[int, threading.Event]" = {}
         self._opened: "dict[str, threading.Event]" = {}
+        self._denied: "set[str]" = set()
         self._values: "dict[str, queue.Queue]" = {}
         self.latest: "dict[str, Any]" = {}
         self.other: "queue.Queue" = queue.Queue()      # undecoded / unknown messages
@@ -108,16 +119,25 @@ class DataSocketClient:
         threading.Thread(target=self._rx, name="datasocket-rx", daemon=True).start()
 
     # ---- public API ----
-    MODE_WRITE, MODE_READ = 4, 7     # values LabVIEW's DataSocket Open sends
+    MODE_WRITE, MODE_READ = 4, 3     # bit flags: 1 read, 2 subscribe, 4 write
+    MODE_LABVIEW_READ = 7            # what LabVIEW's "Read" sends; refused by remote servers
 
-    def open(self, url: str, mode: int = 7) -> str:
-        """Open an item (mode 7 = LabVIEW 'Read', receives pushed values; 4 = 'Write')."""
+    def open(self, url: str, mode: int = 3) -> str:
+        """Open an item. mode 3 (MODE_READ) = read + pushed updates, works locally and remotely;
+        4 (MODE_WRITE) = write (the server allows remote writers only if configured to)."""
         item = _item_name(url)
         ev = self._opened.setdefault(item, threading.Event())
         self._values.setdefault(item, queue.Queue())
+        self._denied.discard(item)
         self._send(_OPEN, (4, item, mode))
-        if not ev.wait(self.timeout):
+        if not ev.wait(self.timeout) or item in self._denied:
             self._opened.pop(item, None)
+            if item in self._denied:
+                raise DataSocketAccessDenied(
+                    f"DataSocket server refused to open {item!r} with mode {mode} (opcode 51). "
+                    f"A server on another PC allows writing (mode bit 4) only from its own "
+                    f"localhost by default: add this PC to its DefaultWriters, or read with "
+                    f"mode=MODE_READ (3).")
             if mode == self.MODE_WRITE:
                 raise DataSocketItemBusy(
                     f"DataSocket server did not answer the write-mode open of {item!r}; "
@@ -222,6 +242,9 @@ class DataSocketClient:
                     self._values.setdefault(v[1], queue.Queue()).put(v[2])
                 elif op == 56:
                     pass
+                elif op == 51 and len(v) > 1:     # access denied for this item
+                    self._denied.add(v[1])
+                    self._opened.setdefault(v[1], threading.Event()).set()
                 else:
                     self.other.put((t, v))
         except (OSError, ConnectionError):

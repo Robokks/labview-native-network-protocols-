@@ -55,3 +55,27 @@ variant with an attribute. Driver: `tools/ds_types.py` (modes roundtrip / write 
 - **A Python open in mode 7 blocks a LabVIEW writer**: LabVIEW's DataSocket Open (Write) got error
   1142 on items a Python client already had open in mode 7. Open order matters: LabVIEW writer first.
 - Tests restarted `cwdss.exe` before each run so no item value could carry over (not checked whether the server keeps values after clients disconnect).
+
+## Open mode bits and remote servers (2026-11-20, LabVIEW 2020 32-bit Writer.vi on another PC)
+The open mode is a bit field: **1 = read, 2 = subscribe (pushed updates), 4 = write**.
+
+| mode | remote DataSocket Server (other PC) |
+|---|---|
+| 7 (LabVIEW's "Read") | refused: server sends `(51, item)`, item reads as 0, no updates |
+| 3 | acknowledged, live updates (about 10/s from Writer.vi) |
+| 2 | acknowledged, current value only |
+| 1, 5 | not acknowledged |
+
+By default the DataSocket Server lets any host read but only localhost write or create, so mode 7
+(which includes write) works only locally. `DataSocketClient` now opens with mode 3. Verified: LabVIEW
+2020 Writer.vi on PC A, Python on PC B reading `wave1` from PC A's server, 40-DBL arrays.
+
+Remote **write** (mode 4) is refused the same way: `(51, item)`. Opcode 51 = access denied, raised as
+`nw.DataSocketAccessDenied`. A remote Python writer needs the server's **DefaultWriters** permission
+group to include the writing PC (DataSocket Server Manager > Permission Groups, then restart the server).
+Verified: with `everyhost` in DefaultWriters, Python wrote 196 ramps in 20 s to the remote server and a
+second Python connection received all of them exactly. LabVIEW 2020 (32-bit) Reader.vi on that PC
+plotted the 0-39 ramp (user confirmed, 2026-11-20). DataSocket therefore works with LabVIEW 2020 in both
+directions across two PCs. Adding only the IP 169.254.16.201 wasn't enough
+on a direct link without DNS.
+- After the last writer of a dynamically created item disconnects, the server resets the item to `0`.

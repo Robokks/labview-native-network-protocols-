@@ -50,3 +50,40 @@ def _value_offset(msg):
     _, p = I32.unpack(msg, p)
     _, p = STRING.unpack(msg, p)
     return p
+
+
+def test_access_denied_opcode_51():
+    """A remote DataSocket Server answers a refused write-mode open with (51, item)."""
+    import socket, struct, threading
+    import nwstreams as nw
+    from nwstreams.datasocket import _msg
+    srv = socket.socket(); srv.bind(("127.0.0.1", 0)); srv.listen(1)
+    def run():
+        c, _ = srv.accept(); buf = b""
+        try:
+            while True:
+                d = c.recv(65536)
+                if not d:
+                    break
+                buf += d
+                while len(buf) >= 4 and len(buf) >= struct.unpack_from("<I", buf)[0]:
+                    n = struct.unpack_from("<I", buf)[0]
+                    v = nw.VARIANT.unpack(buf[:n], 0)[0]; buf = buf[n:]
+                    if v == (2, 3):
+                        c.sendall(_msg(nw.Cluster(nw.I32, nw.I32), (9, 3)))
+                    elif v[0] == 4 and v[2] & 4:          # write bit: refuse like a remote server
+                        c.sendall(_msg(nw.Cluster(nw.I32, nw.STRING), (51, v[1])))
+                    elif v[0] == 4:
+                        c.sendall(_msg(nw.Cluster(nw.I32, nw.STRING, nw.I32), (12, v[1], v[2])))
+        except OSError:
+            pass
+        finally:
+            c.close(); srv.close()
+    threading.Thread(target=run, daemon=True).start()
+    with nw.DataSocketClient(port=srv.getsockname()[1], timeout=1) as ds:
+        try:
+            ds.open("wave1", mode=ds.MODE_WRITE)
+            raise AssertionError("expected DataSocketAccessDenied")
+        except nw.DataSocketAccessDenied as e:
+            assert "DefaultWriters" in str(e)
+        assert ds.open("wave1") == "wave1"                # MODE_READ (3) is accepted

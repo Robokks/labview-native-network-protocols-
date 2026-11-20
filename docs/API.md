@@ -67,18 +67,23 @@ consumer slows the LabVIEW writer down instead of losing data.
 ## DataSocket
 
 ### `nw.DataSocketClient(host="127.0.0.1", port=3015, timeout=5.0)`
-Connects to the NI DataSocket Server (`cwdss.exe`).
+Connects to the NI DataSocket Server (`cwdss.exe`). For a server on another PC, pass its address as
+`host`. The address inside a `dstp://` URL is ignored, and only the item name is used.
 
 | Member | Description |
 |---|---|
 | `open(url, mode=MODE_READ) -> str` | Open an item. `url` is `dstp://localhost/wave1` or just `wave1`. Returns the item name. |
-| `MODE_READ` (7), `MODE_WRITE` (4) | The modes LabVIEW's DataSocket Open sends for Read and Write. |
+| `MODE_READ` (3), `MODE_WRITE` (4) | Bit flags 1 = read, 2 = subscribe, 4 = write. `MODE_READ` works on local **and remote** servers. LabVIEW's own "Read" sends 7, which a remote server refuses. |
 | `read(url, timeout=None)` | Next value the server pushed for the item. The current value arrives right after `open()`. |
 | `drain(url) -> list` | Every value pushed since the last read or drain, without waiting. Raises `ConnectionError` once the connection is gone and nothing is left. |
 | `write(url, value, dtype=None, wait_ack=True)` | Write a value. The type is inferred for float, str and lists of str, so pass `dtype=` otherwise. Waits for the server's acknowledgement. |
 | `latest` | `dict` of the newest value per item. |
 | `closed` | `threading.Event`, set when the connection is gone. |
 | `close()` | Close all items and disconnect. |
+
+**Exception:** `DataSocketAccessDenied`, a subclass of `PermissionError`. The server refused the open
+(opcode 51). A server on another PC allows writing only from its own localhost by default, so add this
+PC to its DefaultWriters, or read with `MODE_READ`.
 
 **Exception:** `DataSocketItemBusy`, a subclass of `TimeoutError`. A write-mode open got no reply,
 because another client (usually a LabVIEW writer) is writing the item. The server allows one writer

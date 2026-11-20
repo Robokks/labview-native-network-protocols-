@@ -2,6 +2,19 @@
 
 All versions are alphas, verified live on LabVIEW 2026 (64-bit, Windows) with NI's example projects.
 
+## Unreleased
+
+### Changed
+- **DataSocket read mode is now 3** (read + live updates) instead of LabVIEW's 7. Mode 7 includes the
+  write bit, which a DataSocket Server on **another PC** refuses by default. Mode 3 works locally and
+  remotely. `DataSocketClient.MODE_LABVIEW_READ` (7) is still available.
+
+### Added
+- `DataSocketAccessDenied`: raised when the server refuses an open with opcode 51 (for example a remote
+  write without DefaultWriters permission). It used to show up as a misleading `DataSocketItemBusy`.
+- Verified with **LabVIEW 2020 (32-bit)** across two PCs: Network Streams (LabVIEW Host.vi ↔ Python
+  Target) and DataSocket in both directions (Writer.vi → Python, Python → Reader.vi).
+
 ## 0.3.0
 
 ### Added

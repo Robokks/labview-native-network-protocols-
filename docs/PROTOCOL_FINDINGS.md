@@ -187,3 +187,6 @@ about 50 elements/s and the initial `Set Frequency 10.1` received.
   each write (about 45/s), Read Backlog stays about 0 at "Slow (20 ms)" (confirmed live).
 - Host.vi's `Set Frequency` commands arrive on every knob change (24 in about 1 s while turning) and
   are applied to the next element.
+- **LabVIEW 2020 (32-bit) Host.vi** works with the same Python Target unchanged (2026-11-20): same
+  lookup, link, credit and writer-ready sequence as LabVIEW 2026 (64-bit). Waves plotted, frequency
+  commands applied, Read Backlog 0 at "Slow (20 ms)".
