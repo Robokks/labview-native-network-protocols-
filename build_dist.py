@@ -58,9 +58,9 @@ def build_wheel() -> Path:
 def build_sdist() -> Path:
     base = f"{NAME}-{VERSION}"
     path = DIST / f"{base}.tar.gz"
-    files = [ROOT / "pyproject.toml", ROOT / "README.md", ROOT / "LICENSE", ROOT / "build_dist.py",
-             *sources()]
-    files += sorted(p for d in ("tests", "examples") for p in (ROOT / d).rglob("*")
+    files = [ROOT / "pyproject.toml", ROOT / "README.md", ROOT / "CHANGELOG.md", ROOT / "LICENSE",
+             ROOT / "build_dist.py", *sources()]
+    files += sorted(p for d in ("tests", "examples", "docs") for p in (ROOT / d).rglob("*")
                     if p.is_file() and "__pycache__" not in p.parts and ".pytest_cache" not in p.parts)
     with tarfile.open(path, "w:gz") as t:
         for p in files:

@@ -7,7 +7,7 @@ packet captures and tested live against LabVIEW 2026 (64-bit, Windows):
 |---|---|---|---|
 | **Network Streams** | `nwstreams.connect()` → `Reader` / `Writer` | ✓ | ✓ |
 | **DataSocket** (`dstp://`, DataSocket Server, TCP 3015) | `nwstreams.DataSocketClient` | ✓ | ✓ |
-| **Network-published Shared Variables** (`psp:`, Shared Variable Engine) | `nwstreams.SharedVariableClient` | ✓ (DBL) | ✓ (DBL) |
+| **Network-published Shared Variables** (`psp:`, Shared Variable Engine) | `nwstreams.SharedVariableClient` | ✓ | ✓ |
 
 No dependencies, standard library only, Python ≥ 3.9.
 
@@ -15,6 +15,26 @@ No dependencies, standard library only, Python ≥ 3.9.
 > or Emerson. The protocols are proprietary and undocumented. Everything here was inferred from captures
 > and may break with other LabVIEW versions or configurations. Use it for test and lab systems.
 > **Don't use it to control safety-relevant equipment.**
+
+## Install
+
+```powershell
+py -m pip install https://github.com/Robokks/labview-native-network-protocols-/releases/download/v0.2.0/nwstreams-0.2.0-py3-none-any.whl
+```
+
+On Windows, `pip` on its own is often not on PATH; `py -m pip` (or `python -m pip`) always works.
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) | Step by step with NI's example projects, plus troubleshooting |
+| [docs/API.md](docs/API.md) | Every class, method, parameter, exception and data type |
+| [CHANGELOG.md](CHANGELOG.md) | What changed in each version |
+| [docs/PROTOCOL_FINDINGS.md](docs/PROTOCOL_FINDINGS.md) | Network Streams wire protocol, as decoded |
+| [docs/DATASOCKET_FINDINGS.md](docs/DATASOCKET_FINDINGS.md) | DataSocket wire protocol |
+| [docs/SHARED_VARIABLE_FINDINGS.md](docs/SHARED_VARIABLE_FINDINGS.md) | Shared Variable (NI-PSP) wire protocol |
+| [docs/TYPE_TEST_PLAN.md](docs/TYPE_TEST_PLAN.md) | How data types are captured and verified |
 
 ## Network Streams
 
@@ -86,11 +106,23 @@ All types in the table above are supported (`write(name, value, dtype=...)`, e.g
 The engine's port is found automatically (it moved between 59110 and 59111 on the test PC); pass
 `port=` to skip the search.
 
+## Polling instead of blocking
+
+Every client queues what LabVIEW pushes. `read()` waits for the next value, while `drain()` returns
+everything available now without waiting, which suits a GUI or control loop:
+
+```python
+for value in ds.drain("wave1"):        # also Reader.drain() and SharedVariableClient.drain(name)
+    process(value)
+if ds.closed.is_set():                 # connection lost (DataSocketClient / SharedVariableClient)
+    reconnect()
+```
+
 ## Tests
 
-```
-pip install pytest
-pytest
+```powershell
+py -m pip install pytest
+py -m pytest
 ```
 
 The tests replay protocol fixtures cut from captures (machine names and user paths replaced) and run
@@ -98,9 +130,11 @@ the clients against stand-in servers, so no LabVIEW is needed.
 
 ## Status
 
-Version 0.2.0, alpha. Verified live on one Windows PC with LabVIEW 2026. Protocol notes are in the
-project's `docs/` folder: `PROTOCOL_FINDINGS.md`, `DATASOCKET_FINDINGS.md` and
-`SHARED_VARIABLE_FINDINGS.md`.
+Version 0.2.0, alpha. Verified live on one Windows PC with LabVIEW 2026. See
+[CHANGELOG.md](CHANGELOG.md) for what's new.
+
+Not supported yet: Python as the Network Streams endpoint that LabVIEW connects to (Target role), and
+connecting to LabVIEW endpoints created without a remote URL.
 
 ## License
 
