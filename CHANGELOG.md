@@ -2,7 +2,7 @@
 
 All versions are alphas, verified live on LabVIEW 2026 (64-bit, Windows) with NI's example projects.
 
-## Unreleased
+## 0.3.0
 
 ### Added
 - **Python as Network Streams Target** (`examples/python_target.py`): a locator responder on TCP 2343

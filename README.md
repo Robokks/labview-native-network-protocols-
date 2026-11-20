@@ -19,7 +19,7 @@ No dependencies, standard library only, Python ≥ 3.9.
 ## Install
 
 ```powershell
-py -m pip install https://github.com/Robokks/labview-native-network-protocols-/releases/download/v0.2.0/nwstreams-0.2.0-py3-none-any.whl
+py -m pip install https://github.com/Robokks/labview-native-network-protocols-/releases/download/v0.3.0/nwstreams-0.3.0-py3-none-any.whl
 ```
 
 On Windows, `pip` on its own is often not on PATH; `py -m pip` (or `python -m pip`) always works.
@@ -145,7 +145,7 @@ the clients against stand-in servers, so no LabVIEW is needed.
 
 ## Status
 
-Version 0.2.0, alpha. Verified live on one Windows PC with LabVIEW 2026. See
+Version 0.3.0, alpha. Verified live with LabVIEW 2026 (Python Target: across two PCs). See
 [CHANGELOG.md](CHANGELOG.md) for what's new.
 
 Not supported yet: connecting to LabVIEW endpoints created without a remote URL (they answer with an
