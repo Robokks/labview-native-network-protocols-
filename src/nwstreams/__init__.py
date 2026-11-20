@@ -19,7 +19,7 @@ from .types import (BOOLEAN, CDB, CSG, DBL, ERROR_CLUSTER, EXT, I8, I16, I32, I6
                     Timestamp, VariantValue, parse_td,
                     pack_element, unpack_element)
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 __all__ = ["connect", "SharedVariableClient", "RawRecord", "JKIEndpoint", "JKIMessage", "JKI_MESSAGE", "list_contexts", "DataSocketClient", "DataSocketMessage", "DataSocketItemBusy", "DataSocketAccessDenied", "Session", "Reader", "RawElement", "Writer", "locate_port", "Frame", "FrameBuffer",
            "MsgType", "ProtocolError", "LinkRefused", "StreamClosed",
            "DataType", "DBL", "I32", "U32", "BOOLEAN", "STRING", "PATH", "LVPath", "ERROR_CLUSTER", "VARIANT", "Array", "Cluster", "MESSAGE", "RawVariant", "VariantValue", "parse_td",

@@ -2,6 +2,33 @@
 
 All versions are alphas, verified live on LabVIEW 2026 (64-bit, Windows) with NI's example projects.
 
+## 0.4.1
+
+Follow-ups reported by an integration consumer. Offline tests only; not re-verified live.
+
+### Changed
+- **Shared Variables:** a value record the client can't decode is now `nw.RawRecord(kind, data)`, a
+  frozen dataclass, instead of the tuple `("raw", kind, data)`.
+  **Backward compatibility:** code that detected the tuple (`isinstance(v, tuple) and v[0] == "raw"`)
+  no longer matches and would treat the record as a value. Use `isinstance(v, nw.RawRecord)`.
+- **Network Streams:** `Reader.drain()` and `Reader.read()` decode an element before acknowledging it.
+  An element the decoder fails on is returned as `nw.RawElement(data, error)` in its place and is still
+  acknowledged, so the writer's credits stay correct. Before, a decode error in `drain()` discarded
+  every element of that call, all of them already acknowledged, and `read()` raised the decoder's
+  exception after acknowledging the element. Code that caught the decoder's exception from `read()`
+  should check for `RawElement` instead.
+
+### Added
+- **DataSocket:** `client.other` holds `nw.DataSocketMessage`, still the 2-tuple `(dtype, value)`, plus
+  `.op`, `.item` and `.error`. A message that can't be decoded (dtype `None`, value = raw bytes) now
+  carries the item it belongs to when the message names one.
+
+### Fixed
+- **DataSocket:** a malformed message (struct, index or Unicode errors, not only unknown descriptor
+  codes) no longer stops the receive thread; it goes to `client.other`.
+- **Docs:** README and Getting Started no longer say a Python DataSocket reader blocks LabVIEW writers that
+  open the item later. That held for read mode 7, the default before 0.3.1; mode 3 has no write bit.
+
 ## 0.4.0
 
 ### Added
