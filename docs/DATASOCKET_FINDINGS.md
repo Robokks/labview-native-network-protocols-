@@ -40,3 +40,18 @@ The item name has no `dstp://host/` prefix on the wire (`wave1`).
   Cluster{DBL, String}.
 - **Python → LabVIEW:** with Writer.vi stopped, Python wrote a 0..39 DBL ramp to `wave1` (149 writes / 15 s,
   all acknowledged). LabVIEW Reader.vi plotted the straight 0–39 line (user screenshot, 2026-11-19).
+
+## Data types (2026-11-20, LabVIEW 2026, `labview/TypeTest/TypeTest DS Writer.vi` / `DS Reader.vi`)
+25 types verified in BOTH directions (LabVIEW -> Python and Python -> LabVIEW, 25/25 each):
+I8, I16, I32, I64, U8, U16, U32, U64, SGL, DBL, EXT, CSG, CDB, Boolean, String, Timestamp,
+Waveform DBL, 1D U8/I16/DBL/String/Timestamp arrays, 2D I32 array, cluster {I32, DBL, String},
+variant with an attribute. Driver: `tools/ds_types.py` (modes roundtrip / write / read).
+
+- **2D and larger arrays are column-major on the wire** (dims are still rows, columns): LabVIEW
+  [[1,2,3],[4,5,6]] arrives as dims 2,3 then 1,4,2,5,3,6. Network Streams don't do this.
+- **A variant with attributes is unwrapped**: the value field carries the contents' type with the
+  attributes in its descriptor (`02 40` blocks before `02 04`), not a variant (`02 09`). The client
+  returns it as `LVVariant(value, attributes)` and writes `LVVariant` the same way.
+- **A Python open in mode 7 blocks a LabVIEW writer**: LabVIEW's DataSocket Open (Write) got error
+  1142 on items a Python client already had open in mode 7. Open order matters: LabVIEW writer first.
+- Tests restarted `cwdss.exe` before each run so no item value could carry over (not checked whether the server keeps values after clients disconnect).

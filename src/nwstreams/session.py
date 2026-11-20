@@ -111,7 +111,8 @@ class Reader(_Link):
 
     def _on_frame(self, f: Frame) -> None:
         if f.type == MsgType.DATA:
-            _src, _dst, cnt, _ = struct.unpack_from("<IIII", f.payload, 0)
+            # 12-byte header; the element may be shorter than 4 bytes (a top-level I8/U8 is 1 byte)
+            _src, _dst, cnt = struct.unpack_from("<III", f.payload, 0)
             self.session._send(Frame(MsgType.RECEIVED, self._hdls() + struct.pack("<I", cnt)))
             self._q.put(f.payload[12:])   # element bytes (incl. length prefix if any)
         else:
@@ -324,7 +325,13 @@ class Session:
                         self.trace("RX", f)
                     link = self._route(f)
                     if link:
-                        link._on_frame(f)
+                        try:
+                            link._on_frame(f)
+                        except Exception as exc:  # one bad link must not stop the session
+                            link._error = exc
+                            link.closed.set()
+                            if isinstance(link, Reader):
+                                link._q.put(b"")
         except OSError:
             pass
         finally:

@@ -29,8 +29,39 @@ import struct
 import threading
 from typing import Any, Optional
 
-from .types import (I32, STRING, U32, Cluster, DataType, VariantValue, VARIANT, infer_type,
+from .types import (I32, STRING, U32, WAVEFORM, Array, Attributed, Attributes, Cluster,
+                    ColumnMajorArray, DataType, LVVariant, VariantValue, VARIANT, infer_type,
                     parse_td_body)
+
+
+def _ds_type(t: DataType) -> DataType:
+    """The type as the DataSocket Server carries it: arrays of 2+ dimensions column-major."""
+    if isinstance(t, Array) and not isinstance(t, ColumnMajorArray):
+        e = _ds_type(t.element)
+        return ColumnMajorArray(e, t.ndims) if t.ndims > 1 else Array(e, 1)
+    if isinstance(t, Cluster):
+        return Cluster(*(_ds_type(f) for f in t.fields))
+    if isinstance(t, Attributed) and t is not WAVEFORM:
+        return Attributed(_ds_type(t.inner), t.attributes)
+    return t
+
+
+def _user_attrs(t: DataType):
+    """Attributes LabVIEW moved from a variant into the value's descriptor (not _NI_*)."""
+    if isinstance(t, Attributed) and t is not WAVEFORM \
+            and not all(k.startswith("_NI_") for k in t.attributes):
+        return t.attributes
+    return None
+
+
+def _write_type(value, dtype: Optional[DataType]):
+    """(type, value) to send. A variant with attributes is sent the way LabVIEW's
+    DataSocket Write sends it: the contents' own type carrying the attributes."""
+    if isinstance(value, LVVariant) and dtype in (None, VARIANT):
+        inner_t = infer_type(value.value) if value.value is not None else VARIANT
+        return Attributed(_ds_type(inner_t), Attributes(value.attributes, types=getattr(
+            value.attributes, "types", {}))), value.value
+    return _ds_type(dtype or infer_type(value)), value
 
 PORT = 3015
 _HELLO = Cluster(I32, I32)
@@ -97,7 +128,7 @@ class DataSocketClient:
     def write(self, url: str, value, dtype: Optional[DataType] = None, wait_ack: bool = True):
         """Write a value (type inferred for float/str/list of str, else pass dtype)."""
         item = _item_name(url)
-        t = dtype or infer_type(value)
+        t, value = _write_type(value, dtype)
         seq = next(self._seq)
         ev = self._acks[seq] = threading.Event()
         self._send(Cluster(I32, STRING, t, U32), (13, item, value, seq))
@@ -143,9 +174,17 @@ class DataSocketClient:
                     b = bytes(self._buf[:n]); del self._buf[:n]
                     try:
                         t, p = parse_td_body(b, 4)
-                        return t, t.unpack(b, p)[0]
+                        t = _ds_type(t)
+                        v = t.unpack(b, p)[0]
                     except NotImplementedError:
                         return None, b
+                    # value message (6, item, value): give back attributes LabVIEW put
+                    # in the value's descriptor as an LVVariant
+                    if isinstance(t, Cluster) and len(t.fields) == 3 and v and v[0] == 6:
+                        attrs = _user_attrs(t.fields[2])
+                        if attrs is not None:
+                            v = (v[0], v[1], LVVariant(v[2], attrs))
+                    return t, v
             chunk = self._sock.recv(65536)
             if not chunk:
                 raise ConnectionError("DataSocket server closed the connection")

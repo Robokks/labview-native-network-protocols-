@@ -23,16 +23,7 @@ TD_MESSAGE_CLUSTER = bytes.fromhex(  # cluster{string Message, variant Message D
     "1400000014000000010802000600000000090600000002090a0000000a00000002000000010132")
 
 
-@dataclass
-class Waveform:
-    t0: float          # seconds since the LabVIEW epoch (1904-01-01 UTC)
-    dt: float
-    y: tuple[float, ...]
-    attributes_raw: bytes = b""
-
-    @property
-    def t0_datetime(self) -> datetime:
-        return LV_EPOCH + timedelta(seconds=self.t0)
+from .types import Waveform  # noqa: E402  (shared with the generic WAVEFORM type)
 
 
 def lv_timestamp(raw: bytes) -> float:

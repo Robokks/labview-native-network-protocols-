@@ -152,8 +152,11 @@ def test_cluster_descriptor_matches_command_capture():
 def test_descriptor_parser_roundtrip():
     for t in (nw.DBL, nw.STRING, nw.VARIANT, nw.Array(nw.DBL), nw.Array(nw.STRING), nw.MESSAGE):
         assert nw.parse_td(t.td()) == t
-    with pytest.raises(NotImplementedError):   # waveform descriptor not decoded yet
-        nw.parse_td(nw.WAVEFORM_ARRAY.td())
+    # the captured waveform-array descriptor is now generated, byte for byte
+    assert nw.parse_td(nw.WAVEFORM_ARRAY.td()) == nw.Array(nw.WAVEFORM)
+    assert nw.Array(nw.WAVEFORM).td() == nw.WAVEFORM_ARRAY.td()
+    with pytest.raises(NotImplementedError):
+        nw.parse_td(b"\x06\x00\x00\x00\x07\x07")
 
 
 CLUSTER_T = nw.Cluster(nw.DBL, nw.BOOLEAN, nw.Array(nw.DBL), nw.Array(nw.STRING),

@@ -36,15 +36,24 @@ endpoint LabVIEW connects to (Python as Target.vi) isn't supported yet.
 ### Data types
 
 Type descriptors are generated from these building blocks, and decoded types round-trip byte for byte
-against captures:
+against data LabVIEW 2026 sent:
 
-`DBL`, `I32` and `U32` (inside clusters), `BOOLEAN`, `STRING`, `PATH`, `VARIANT`, `Array(t, ndims)`,
-`Cluster(...)`, `ERROR_CLUSTER`, `MESSAGE` (the example's command cluster), `WAVEFORM_ARRAY`
-(descriptor copied from a capture).
+| Kind | Types |
+|---|---|
+| Integers | `I8`, `I16`, `I32`, `I64`, `U8`, `U16`, `U32`, `U64` (enums arrive as their U8/U16 number) |
+| Floating point | `SGL`, `DBL`, `EXT` (read as a Python float) |
+| Complex | `CSG`, `CDB` (Python `complex`) |
+| Time | `TIMESTAMP` → `nw.Timestamp` (`.unix`, `.lv`, `from_unix()`) |
+| Other | `BOOLEAN`, `STRING`, `PATH`, `VARIANT` (attributes → `nw.LVVariant`) |
+| Containers | `Array(t, ndims)`, `Cluster(...)`, `ERROR_CLUSTER`, `MESSAGE` |
+| Waveform | `WAVEFORM` (DBL) → `nw.Waveform` with `.attributes`; `WAVEFORM_ARRAY` |
 
-`nwstreams.parse_td()` turns a descriptor from the wire into one of these types. Types not seen yet
-(for example U8, SGL, I64, enum, timestamp, and I32 as a stream's own type) raise
-`NotImplementedError` rather than guessing.
+`nwstreams.parse_td()` turns a descriptor from the wire into one of these types. Unknown descriptors
+raise `NotImplementedError` rather than guessing.
+
+**Verification state.** DataSocket: every type above (25 cases) verified in both directions against
+LabVIEW. Network Streams: every type verified inside a Variant stream (LabVIEW → Python); as a
+stream's own element type only DBL, DBL[], String[], Variant, the example's clusters and I8 so far.
 
 ## DataSocket
 
@@ -57,6 +66,12 @@ with nw.DataSocketClient() as ds:           # DataSocket Server on 127.0.0.1:301
 ```
 
 The server allows one writer per item. A write-mode open of a busy item raises `DataSocketItemBusy`.
+A Python read-mode open also blocks a LabVIEW writer that opens the item later (LabVIEW error 1142),
+so start LabVIEW writers first.
+
+Any type in the table above can be written and read (`dtype=` when it can't be inferred). 2-D and
+larger arrays are column-major on the DataSocket wire and a variant's attributes travel in the value's
+type descriptor; the client handles both, so values look the same as in LabVIEW.
 
 ## Shared Variables
 
@@ -82,7 +97,7 @@ the clients against stand-in servers, so no LabVIEW is needed.
 
 ## Status
 
-Version 0.1.1, alpha. Verified live on one Windows PC with LabVIEW 2026. Protocol notes are in the
+Version 0.2.0, alpha. Verified live on one Windows PC with LabVIEW 2026. Protocol notes are in the
 project's `docs/` folder: `PROTOCOL_FINDINGS.md`, `DATASOCKET_FINDINGS.md` and
 `SHARED_VARIABLE_FINDINGS.md`.
 
