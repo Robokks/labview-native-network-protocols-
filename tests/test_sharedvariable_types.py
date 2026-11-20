@@ -29,4 +29,25 @@ def test_ints_come_back_as_int():
 
 
 def test_unknown_kind_stays_raw():
-    assert parse_record(bytes.fromhex("0600000077770000abcd"), 0)[0] == "raw"
+    got = parse_record(bytes.fromhex("0600000077770000abcd"), 0)
+    assert isinstance(got, nw.RawRecord)
+    assert got == nw.RawRecord(0x7777, bytes.fromhex("abcd"))
+    assert got.kind == 0x7777 and got.data == bytes.fromhex("abcd")
+
+
+def test_undecodable_known_kind_is_raw_record():
+    # a String record (0x1005) whose length field runs past the data: kept as RawRecord
+    got = parse_record(bytes.fromhex("0600000005100000ff"), 0)
+    assert isinstance(got, nw.RawRecord) and got.kind == 0x1005
+
+
+def test_raw_record_is_frozen_and_hashable():
+    import dataclasses
+    r = nw.RawRecord(1, b"x")
+    assert hash(r) == hash(nw.RawRecord(1, b"x"))
+    try:
+        r.kind = 2
+        raise AssertionError("RawRecord must be frozen")
+    except dataclasses.FrozenInstanceError:
+        pass
+    assert not isinstance(r, tuple)        # no longer the ("raw", kind, data) tuple

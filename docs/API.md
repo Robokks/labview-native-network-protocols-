@@ -132,6 +132,10 @@ One session to the Shared Variable Engine (`tagsrv.exe`) for **one variable libr
 
 The library must be **deployed**, otherwise `open()` times out.
 
+A value record the client can't decode is returned as `nw.RawRecord(kind, data)` (frozen dataclass:
+the record's u32 kind field and its bytes), in place of the value, so nothing is dropped. Test for it
+with `isinstance(value, nw.RawRecord)`. Before 0.4.1 it was the tuple `("raw", kind, data)`.
+
 ---
 
 ## Data types

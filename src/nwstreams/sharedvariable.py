@@ -17,6 +17,7 @@ import queue
 import socket
 import struct
 import threading
+from dataclasses import dataclass
 from typing import Optional
 
 from .datasocket import _ds_type, _user_attrs, _write_type
@@ -55,6 +56,19 @@ _NUM_KIND = {t: (sub << 16) | K_NUM for sub, t in _NUM_SUBTYPES.items()}
 _INT_TYPES = (I8, I16, I32, U8, U16, U32)
 
 
+@dataclass(frozen=True)
+class RawRecord:
+    """A value record the client could not decode, kept byte-exact.
+
+    kind: the record's u32 kind field (low 16 bits = encoding, see above).
+    data: the record's bytes after the kind field.
+    Detect it with ``isinstance(value, nw.RawRecord)``. Before 0.4.1 this was the plain
+    tuple ``("raw", kind, data)``.
+    """
+    kind: int
+    data: bytes
+
+
 def dbl_record(v: float) -> bytes:
     """DBL record: u32 12 + u32 3 + f64."""
     return struct.pack("<IId", 12, 3, v)
@@ -85,7 +99,7 @@ def _variant_bytes(t: DataType, v) -> bytes:
 
 
 def parse_record(p: bytes, o: int):
-    """Decode a value record; unknown encodings come back as ('raw', kind, data)."""
+    """Decode a value record; unknown or undecodable encodings come back as RawRecord."""
     n, kind = struct.unpack_from("<II", p, o)
     data, low = p[o + 8:o + 4 + n], kind & 0xFFFF
     try:
@@ -108,7 +122,7 @@ def parse_record(p: bytes, o: int):
             return LVVariant(v, attrs) if attrs is not None else v
     except (NotImplementedError, struct.error, IndexError, UnicodeDecodeError):
         pass
-    return ("raw", kind, data)
+    return RawRecord(kind, bytes(data))
 
 
 def parse_psp_url(url: str, default_lib: Optional[str] = None):
