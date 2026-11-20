@@ -77,7 +77,7 @@ in Create Endpoint. Start the service and restart LabVIEW.
 | `LinkRefused … -314050` | The LabVIEW endpoint doesn't exist (yet), or it ended after the last run | Start or restart the LabVIEW VI, or pass `wait_for_peer=30` |
 | `TimeoutError: no answer to link request` | You connected to an endpoint created **without** a remote URL; that handshake isn't supported | Use the example's own Target.vi, which waits for a reader |
 | `DataSocketItemBusy` | Another client (e.g. LabVIEW Writer.vi) is writing the item | Stop that writer, or open in read mode |
-| LabVIEW error 1142 in a DataSocket writer | A Python read-mode open of the item came first | Start LabVIEW writers before Python readers |
+| LabVIEW error 1142 in a DataSocket writer | A Python reader opened the item with mode 7 first (the default before 0.3.1, or `mode=7`) | Use 0.3.1+ with the default read mode 3, or start LabVIEW writers first |
 | Shared Variable `open()` times out | The library isn't deployed, or the wrong library name was given | Deploy the `.lvlib` and check the name |
 | Shared Variable client can't find the engine | The engine moved to an unusual port | Pass `port=` (find it with `Get-NetTCPConnection -State Listen`; the process is `tagsrv`) |
 | Values look wrong or `NotImplementedError` | The data type hasn't been decoded yet | See the type table in [API.md](API.md), and open an issue with a capture |

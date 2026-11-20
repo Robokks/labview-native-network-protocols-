@@ -117,8 +117,13 @@ with nw.DataSocketClient() as ds:           # DataSocket Server on 127.0.0.1:301
 ```
 
 The server allows one writer per item. A write-mode open of a busy item raises `DataSocketItemBusy`.
-A Python read-mode open also blocks a LabVIEW writer that opens the item later (LabVIEW error 1142),
-so start LabVIEW writers first.
+
+Readers and later writers: before 0.3.1 the client read with mode 7, LabVIEW's own "Read", which
+includes the write bit. Such a reader held the item's write slot, so a writer that opened the item
+later was blocked: a LabVIEW writer got error 1142 and a Python writer got `DataSocketItemBusy`. Since
+0.3.1 the default read mode is 3 (read + updates, no write bit), so a Python reader no longer blocks
+later writers and the open order doesn't matter. Opening with `mode=ds.MODE_LABVIEW_READ` (7) still
+behaves the old way.
 
 Any type in the table above can be written and read (`dtype=` when it can't be inferred). 2-D and
 larger arrays are column-major on the DataSocket wire and a variant's attributes travel in the value's

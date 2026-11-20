@@ -121,9 +121,11 @@ def test_datasocket_message_is_still_a_2_tuple():
     assert (m.dtype, m.value, m.op, m.item, m.decoded) == (None, b"abc", 6, "wave1", False)
 
 
-def _fake_ds_pushing(messages):
-    """DataSocket server: answers hello and opens, then pushes the given raw messages."""
+def _fake_ds_pushing(messages, opens=None):
+    """DataSocket server: answers hello and opens, then pushes the given raw messages.
+    opens: a list that receives each (4, item, mode) open request."""
     import socket, struct, threading
+    opens = [] if opens is None else opens
     srv = socket.socket(); srv.bind(("127.0.0.1", 0)); srv.listen(1)
     def run():
         c, _ = srv.accept(); buf = b""
@@ -139,6 +141,7 @@ def _fake_ds_pushing(messages):
                     if v == (2, 3):
                         c.sendall(_msg(Cluster(I32, I32), (9, 3)))
                     elif v[0] == 4:
+                        opens.append(v)
                         c.sendall(_msg(Cluster(I32, STRING, I32), (12, v[1], v[2])))
                         for m in messages:
                             c.sendall(m)
@@ -163,3 +166,14 @@ def test_undecodable_push_goes_to_other_with_item():
         t, v = ds.other.get(timeout=2)                  # decoded but unknown opcode
         assert v == (10,) and t is not None
         assert not ds.closed.is_set()
+
+
+def test_default_read_open_has_no_write_bit():
+    """Since 0.3.1 a read opens with mode 3, so it doesn't hold the item's one write slot
+    (mode 7, LabVIEW's "Read", did, and blocked writers that opened the item later)."""
+    opens = []
+    with nw.DataSocketClient(port=_fake_ds_pushing([], opens), timeout=2) as ds:
+        ds.open("dstp://localhost/wave1")
+        ds.open("wave2", mode=ds.MODE_LABVIEW_READ)
+    assert opens[0] == (4, "wave1", 3) and not opens[0][2] & 4
+    assert opens[1] == (4, "wave2", 7) and opens[1][2] & 4
