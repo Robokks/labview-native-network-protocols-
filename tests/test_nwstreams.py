@@ -411,6 +411,64 @@ def test_reader_drain_returns_available_elements_then_reports_close():
         assert rd.drain() == []          # nothing new: empty, no wait
 
 
+# ---- decode failures: nothing lost, every element acknowledged exactly once (0.4.1) ----
+
+def _flaky_decoder(fail_on):
+    """WAVEFORM_ARRAY decoder that raises on the given (0-based) element numbers."""
+    calls = []
+    def dec(b):
+        calls.append(b)
+        if len(calls) - 1 in fail_on:
+            raise ValueError("bad element")
+        return nw.unpack_element(nw.WAVEFORM_ARRAY, b)
+    return dec
+
+
+def _wait_consumed(fake, n):
+    import time
+    deadline = time.monotonic() + 5
+    while fake.consumed < n and time.monotonic() < deadline:
+        time.sleep(0.02)
+    return fake.consumed
+
+
+def test_reader_drain_keeps_elements_around_a_decode_failure():
+    import time
+    from fake_labview import captured_data_payloads
+    payloads = captured_data_payloads()
+    fake = FakeLabVIEW(n_frames=5)
+    with nw.connect(port=fake.port, url_host="EXAMPLE-PC1") as s:
+        rd = s.open_reader("data/writer", "data/reader", nw.WAVEFORM_ARRAY,
+                           decoder=_flaky_decoder({2}))
+        deadline = time.monotonic() + 5
+        while rd.available < 5 and time.monotonic() < deadline:
+            time.sleep(0.02)
+        got = rd.drain()                 # before 0.4.1 this raised and lost all five
+        assert len(got) == 5
+        bad = got[2]
+        assert isinstance(bad, nw.RawElement) and "ValueError: bad element" == bad.error
+        assert bad.data == payloads[2 % len(payloads)]
+        assert all(len(w) == 2 for i, w in enumerate(got) if i != 2)
+        assert _wait_consumed(fake, 5) == 5          # each acknowledged exactly once
+
+
+def test_reader_read_returns_raw_element_and_keeps_flow_control():
+    # every element fails to decode; 150 > the 100-slot buffer, so the writer only gets
+    # through if each failed element still returned its slot
+    fake = FakeLabVIEW(n_frames=150)
+    with nw.connect(port=fake.port, url_host="EXAMPLE-PC1") as s:
+        rd = s.open_reader("data/writer", "data/reader", nw.WAVEFORM_ARRAY,
+                           decoder=_flaky_decoder(set(range(150))))
+        got = [rd.read(timeout=5) for _ in range(150)]
+        assert all(isinstance(g, nw.RawElement) for g in got)
+        assert _wait_consumed(fake, 150) == 150
+
+
+def test_raw_element_is_a_distinct_value_type():
+    assert nw.RawElement(b"ab", "x") == nw.RawElement(b"ab", "x")
+    assert not isinstance(nw.RawElement(b"ab", "x"), (bytes, tuple))
+
+
 def test_shared_variable_drain_and_closed_flag():
     import time
     port, state = _fake_sve()

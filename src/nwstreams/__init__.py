@@ -12,7 +12,7 @@ from .datasocket import (DataSocketAccessDenied, DataSocketClient, DataSocketIte
 from .sharedvariable import RawRecord, SharedVariableClient
 from .jki import JKI_MESSAGE, JKIEndpoint, JKIMessage
 from .locator import list_contexts
-from .session import LinkRefused, Reader, Session, StreamClosed, Writer, connect
+from .session import LinkRefused, RawElement, Reader, Session, StreamClosed, Writer, connect
 from .types import (BOOLEAN, CDB, CSG, DBL, ERROR_CLUSTER, EXT, I8, I16, I32, I64, U8, U16, U32,
                     U64, SGL, MESSAGE, PATH, STRING, TIMESTAMP, VARIANT, WAVEFORM, Array,
                     Attributed, Attributes, Cluster, DataType, LVPath, LVVariant, RawVariant,
@@ -20,7 +20,7 @@ from .types import (BOOLEAN, CDB, CSG, DBL, ERROR_CLUSTER, EXT, I8, I16, I32, I6
                     pack_element, unpack_element)
 
 __version__ = "0.4.0"
-__all__ = ["connect", "SharedVariableClient", "RawRecord", "JKIEndpoint", "JKIMessage", "JKI_MESSAGE", "list_contexts", "DataSocketClient", "DataSocketMessage", "DataSocketItemBusy", "DataSocketAccessDenied", "Session", "Reader", "Writer", "locate_port", "Frame", "FrameBuffer",
+__all__ = ["connect", "SharedVariableClient", "RawRecord", "JKIEndpoint", "JKIMessage", "JKI_MESSAGE", "list_contexts", "DataSocketClient", "DataSocketMessage", "DataSocketItemBusy", "DataSocketAccessDenied", "Session", "Reader", "RawElement", "Writer", "locate_port", "Frame", "FrameBuffer",
            "MsgType", "ProtocolError", "LinkRefused", "StreamClosed",
            "DataType", "DBL", "I32", "U32", "BOOLEAN", "STRING", "PATH", "LVPath", "ERROR_CLUSTER", "VARIANT", "Array", "Cluster", "MESSAGE", "RawVariant", "VariantValue", "parse_td",
            "WAVEFORM_ARRAY", "Waveform", "pack_element", "unpack_element",

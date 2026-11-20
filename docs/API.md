@@ -62,6 +62,11 @@ doesn't exist yet. That's what LabVIEW itself does, so it doesn't matter which s
 Flow control: an element's buffer slot is returned to LabVIEW only when you read it, so a slow Python
 consumer slows the LabVIEW writer down instead of losing data.
 
+Decode failures: if the decoder raises on an element, `read()` and `drain()` return
+`nw.RawElement(data, error)` in its place (the flattened bytes and the error text) and carry on with
+the next elements. The element's slot is still returned to LabVIEW, so one bad element can't stall the
+writer. Before 0.4.1, `drain()` lost every element of that call and `read()` raised the decoder's error.
+
 ### `Writer`
 | Member | Description |
 |---|---|

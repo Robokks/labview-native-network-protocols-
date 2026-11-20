@@ -12,6 +12,7 @@ import socket
 import struct
 import threading
 import time
+from dataclasses import dataclass
 from typing import Callable, Optional
 
 from .framing import Frame, FrameBuffer, MsgType, ProtocolError, lv_string
@@ -32,6 +33,17 @@ class LinkRefused(ProtocolError):
 
 class StreamClosed(ProtocolError):
     pass
+
+
+@dataclass(frozen=True)
+class RawElement:
+    """An element the reader's decoder failed on, kept byte-exact.
+
+    read() and drain() return it in the element's place, so a decode failure loses
+    nothing and the elements around it are still delivered. data: the flattened element
+    (as read_raw() returns it); error: the decoder's exception as text."""
+    data: bytes
+    error: str
 
 
 class _Link:
@@ -126,24 +138,52 @@ class Reader(_Link):
         self.session._send(Frame(MsgType.CREDIT_GRANT, self.id + self._hdls()
                                  + struct.pack("<II", self.buffer_size, 0)))
 
-    def read_raw(self, timeout: Optional[float] = None) -> bytes:
-        """Return one flattened element. Returning its slot to the writer happens here,
-        so a slow consumer applies real back-pressure to LabVIEW."""
+    # Flow control: every element taken off the queue must be acknowledged with exactly one
+    # CONSUMED, which returns its buffer slot (credit) to the writer. An element that is never
+    # acknowledged costs the writer a credit for good, and after buffer_size of them the
+    # LabVIEW writer blocks. So an element is acknowledged once it has been decoded and is
+    # being handed to the caller (as a RawElement if the decoder failed), never before and
+    # never twice.
+
+    def _consumed(self) -> None:
+        try:
+            self.session._send(Frame(MsgType.CONSUMED, self._hdls() + struct.pack("<I", 1)))
+        except OSError:
+            pass     # session gone: no slot to return; the close is reported by the next call
+
+    def _decode(self, data: bytes):
+        if not self.decoder:
+            return data
+        try:
+            return self.decoder(data)
+        except Exception as exc:            # keep the bytes instead of losing the element
+            return RawElement(bytes(data), f"{type(exc).__name__}: {exc}")
+
+    def _get(self, timeout: Optional[float]) -> bytes:
         try:
             data = self._q.get(timeout=timeout)
         except queue.Empty:
             raise TimeoutError("no element within timeout") from None
         if not data and self.closed.is_set():
             raise StreamClosed("writer endpoint closed the stream")
-        self.session._send(Frame(MsgType.CONSUMED, self._hdls() + struct.pack("<I", 1)))
+        return data
+
+    def read_raw(self, timeout: Optional[float] = None) -> bytes:
+        """Return one flattened element. Returning its slot to the writer happens here,
+        so a slow consumer applies real back-pressure to LabVIEW."""
+        data = self._get(timeout)
+        self._consumed()
         return data
 
     def read(self, timeout: Optional[float] = None):
-        data = self.read_raw(timeout)
-        return self.decoder(data) if self.decoder else data
+        """Next element, decoded; a RawElement with its bytes if the decoder fails."""
+        value = self._decode(self._get(timeout))
+        self._consumed()
+        return value
 
     def drain(self, max_items: Optional[int] = None) -> list:
         """Every element available now (decoded), oldest first, without waiting.
+        An element the decoder fails on comes back as a RawElement in its place.
         Raises StreamClosed once the writer has closed and nothing is left."""
         out = []
         while max_items is None or len(out) < max_items:
@@ -156,8 +196,8 @@ class Reader(_Link):
                     self._q.put(b"")       # report the close on the next call
                     break
                 raise StreamClosed("writer endpoint closed the stream")
-            self.session._send(Frame(MsgType.CONSUMED, self._hdls() + struct.pack("<I", 1)))
-            out.append(self.decoder(data) if self.decoder else data)
+            out.append(self._decode(data))
+            self._consumed()
         return out
 
     @property
