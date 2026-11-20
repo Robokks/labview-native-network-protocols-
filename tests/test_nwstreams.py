@@ -394,3 +394,39 @@ def test_shared_variable_client_end_to_end():
             sv.open(r"psp:\\localhost\Other Lib\X")
     import time; time.sleep(0.2)
     assert state["closed"] == [(5, 1)]
+
+
+# ---- drain(): everything available now, no waiting (for polling consumers) ----
+
+def test_reader_drain_returns_available_elements_then_reports_close():
+    import time
+    fake = FakeLabVIEW(n_frames=5)
+    with nw.connect(port=fake.port, url_host="EXAMPLE-PC1") as s:
+        rd = s.open_reader("data/writer", "data/reader", nw.WAVEFORM_ARRAY)
+        got, deadline = [], time.monotonic() + 5
+        while len(got) < 5 and time.monotonic() < deadline:
+            got += rd.drain()
+            time.sleep(0.05)
+        assert len(got) == 5 and all(len(w) == 2 for w in got)
+        assert rd.drain() == []          # nothing new: empty, no wait
+
+
+def test_shared_variable_drain_and_closed_flag():
+    import time
+    port, state = _fake_sve()
+    with nw.SharedVariableClient("Server Variables", port=port, machine="EXAMPLE-PC1", timeout=2) as sv:
+        sv.open("Monitor Value 1")
+        deadline = time.monotonic() + 2
+        vals = []
+        while not vals and time.monotonic() < deadline:
+            vals = sv.drain("Monitor Value 1")
+            time.sleep(0.02)
+        assert vals == [0.5]
+        assert sv.drain("Monitor Value 1") == []
+        assert not sv.closed.is_set()
+    deadline = time.monotonic() + 2
+    while not sv.closed.is_set() and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert sv.closed.is_set()
+    with pytest.raises(ConnectionError):
+        sv.drain("Monitor Value 1")

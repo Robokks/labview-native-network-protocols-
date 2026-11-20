@@ -142,6 +142,24 @@ class Reader(_Link):
         data = self.read_raw(timeout)
         return self.decoder(data) if self.decoder else data
 
+    def drain(self, max_items: Optional[int] = None) -> list:
+        """Every element available now (decoded), oldest first, without waiting.
+        Raises StreamClosed once the writer has closed and nothing is left."""
+        out = []
+        while max_items is None or len(out) < max_items:
+            try:
+                data = self._q.get_nowait()
+            except queue.Empty:
+                break
+            if not data and self.closed.is_set():
+                if out:
+                    self._q.put(b"")       # report the close on the next call
+                    break
+                raise StreamClosed("writer endpoint closed the stream")
+            self.session._send(Frame(MsgType.CONSUMED, self._hdls() + struct.pack("<I", 1)))
+            out.append(self.decoder(data) if self.decoder else data)
+        return out
+
     @property
     def available(self) -> int:
         return self._q.qsize()

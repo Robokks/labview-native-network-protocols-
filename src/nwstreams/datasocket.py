@@ -104,6 +104,7 @@ class DataSocketClient:
         if v != (9, 3):
             raise IOError(f"unexpected DataSocket hello reply: {v!r}")
         self._closed = False
+        self.closed = threading.Event()   # set when the connection is gone
         threading.Thread(target=self._rx, name="datasocket-rx", daemon=True).start()
 
     # ---- public API ----
@@ -141,6 +142,20 @@ class DataSocketClient:
             return self._values[_item_name(url)].get(timeout=timeout or self.timeout)
         except queue.Empty:
             raise TimeoutError("no new value within timeout") from None
+
+    def drain(self, url: str) -> list:
+        """Every value pushed for this item since the last read/drain, oldest first,
+        without waiting. Raises ConnectionError once the connection is gone and
+        nothing is left."""
+        q, out = self._values[_item_name(url)], []
+        while True:
+            try:
+                out.append(q.get_nowait())
+            except queue.Empty:
+                break
+        if not out and self.closed.is_set():
+            raise ConnectionError("DataSocket connection closed")
+        return out
 
     def close(self) -> None:
         if self._closed:
@@ -211,3 +226,5 @@ class DataSocketClient:
                     self.other.put((t, v))
         except (OSError, ConnectionError):
             pass
+        finally:
+            self.closed.set()      # connection lost or closed: no more values will arrive

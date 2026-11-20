@@ -170,6 +170,7 @@ class SharedVariableClient:
             raise ProtocolError(f"no Shared Variable Engine on {host} serves library "
                                 f"{library!r} (deployed?): " + "; ".join(errors))
         self._closed = False
+        self.closed = threading.Event()   # set when the connection is gone
         threading.Thread(target=self._rx, name="sharedvariable-rx", daemon=True).start()
 
     # ---- public API ----
@@ -201,6 +202,20 @@ class SharedVariableClient:
             return self._item(name).values.get(timeout=timeout or self.timeout)
         except queue.Empty:
             raise TimeoutError(f"no update for {name!r} within timeout") from None
+
+    def drain(self, name: str) -> list:
+        """Every update pushed for this variable since the last read/drain, oldest first,
+        without waiting. Raises ConnectionError once the connection is gone and nothing
+        is left."""
+        q, out = self._item(name).values, []
+        while True:
+            try:
+                out.append(q.get_nowait())
+            except queue.Empty:
+                break
+        if not out and self.closed.is_set():
+            raise ConnectionError("Shared Variable Engine connection closed")
+        return out
 
     def latest(self, name: str):
         return self._item(name).latest
@@ -306,3 +321,5 @@ class SharedVariableClient:
                         it.closed.set()
         except (OSError, ConnectionError):
             pass
+        finally:
+            self.closed.set()      # connection lost or closed: no more values will arrive
