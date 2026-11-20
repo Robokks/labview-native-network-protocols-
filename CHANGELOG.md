@@ -2,7 +2,7 @@
 
 All versions are alphas, verified live on LabVIEW 2026 (64-bit, Windows) with NI's example projects.
 
-## Unreleased
+## 0.3.1
 
 ### Changed
 - **DataSocket read mode is now 3** (read + live updates) instead of LabVIEW's 7. Mode 7 includes the
