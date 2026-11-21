@@ -19,7 +19,7 @@ No dependencies, standard library only, Python ≥ 3.9.
 ## Install
 
 ```powershell
-py -m pip install https://github.com/Robokks/labview-native-network-protocols-/releases/download/v0.4.0/nwstreams-0.4.0-py3-none-any.whl
+py -m pip install https://github.com/Robokks/labview-native-network-protocols-/releases/download/v0.4.1/nwstreams-0.4.1-py3-none-any.whl
 ```
 
 On Windows, `pip` on its own is often not on PATH; `py -m pip` (or `python -m pip`) always works.
